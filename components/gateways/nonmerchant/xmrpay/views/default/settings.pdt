@@ -1,0 +1,17 @@
+<div class="mb-3">
+    <?php $this->Form->label('Agent URL (loopback)', 'agent_url', ['class' => 'form-label']); ?>
+    <?php $this->Form->fieldText('agent_url', $meta['agent_url'] ?? 'http://127.0.0.1:8792', ['id' => 'agent_url', 'class' => 'form-control']); ?>
+</div>
+<div class="mb-3">
+    <?php $this->Form->label('Agent token', 'agent_token', ['class' => 'form-label']); ?>
+    <?php $this->Form->fieldText('agent_token', $meta['agent_token'] ?? '', ['id' => 'agent_token', 'class' => 'form-control']); ?>
+</div>
+<div class="mb-3">
+    <?php $this->Form->label('Webhook secret', 'webhook_secret', ['class' => 'form-label']); ?>
+    <?php $this->Form->fieldText('webhook_secret', $meta['webhook_secret'] ?? '', ['id' => 'webhook_secret', 'class' => 'form-control']); ?>
+</div>
+<div class="mb-3">
+    <?php $this->Form->label('Monero network', 'network', ['class' => 'form-label']); ?>
+    <?php $this->Form->fieldSelect('network', ['stagenet' => 'Stagenet', 'mainnet' => 'Mainnet'], $meta['network'] ?? 'stagenet', ['id' => 'network', 'class' => 'form-select']); ?>
+</div>
+<p>Webhook URL: <code><?php echo $this->Html->safe(Configure::get('Blesta.gw_callback_url') . Configure::get('Blesta.company_id') . '/xmrpay/'); ?></code></p>

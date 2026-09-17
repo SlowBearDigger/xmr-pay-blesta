@@ -1,0 +1,7 @@
+{
+  "version": "1.0.0",
+  "name": "Xmrpay.name",
+  "description": "Xmrpay.description",
+  "authors": [{"name": "XMRPay", "url": "https://xmrpay.shop/"}],
+  "currencies": ["USD", "EUR", "XMR"]
+}

@@ -1,0 +1,7 @@
+<div class="card"><div class="card-body">
+    <h3>Pay with Monero</h3>
+    <p>Send exactly <strong><?php echo $this->Html->safe($xmr_amount); ?> XMR</strong> on <strong><?php echo $this->Html->safe($network); ?></strong> to:</p>
+    <p style="overflow-wrap:anywhere"><code><?php echo $this->Html->safe($address); ?></code></p>
+    <p><a class="btn btn-primary" href="<?php echo $this->Html->safe($payment_uri); ?>">Open Monero wallet</a></p>
+    <p>Payment is recorded after network confirmation. Refresh the invoice to see its status.</p>
+</div></div>

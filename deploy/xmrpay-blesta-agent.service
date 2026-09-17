@@ -1,0 +1,17 @@
+[Unit]
+Description=XMRPay Blesta stagenet agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=deploy
+WorkingDirectory=/home/deploy/xmrpay-blesta-agent
+EnvironmentFile=/home/deploy/xmrpay-blesta-agent/.env
+ExecStart=/usr/bin/node /home/deploy/xmrpay-shop/server/node_modules/xmr-pay/examples/scanner-agent.js
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
