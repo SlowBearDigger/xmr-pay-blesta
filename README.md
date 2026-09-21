@@ -13,7 +13,11 @@ Copy `components/gateways/nonmerchant/xmrpay` into the same path in Blesta. In *
 
 Set the agent's `FULFILL_WEBHOOK_URL` to the callback URL shown in gateway settings. Enable USD and/or EUR on the gateway. XMR also works when XMR is configured as a Blesta currency. Configure Blesta cron using the command shown under **Settings → System → Automation**. Blesta's service module handles provisioning after the invoice is paid.
 
-The agent and Blesta need different secrets for each installation. Keep the agent on loopback and its wallet view-only.
+Use matching agent tokens and webhook secrets at both ends of this integration. Use separate values for the token and webhook secret, and generate new values for each installation. Keep the agent on loopback and its wallet view-only.
+
+USD and EUR quotes use CoinGecko; XMR does not need a price feed. Each quote stores
+its currency amount, XMR amount and payment metadata. A callback must match that
+metadata and the agent's confirmed order before Blesta records the payment.
 
 ## Test
 
