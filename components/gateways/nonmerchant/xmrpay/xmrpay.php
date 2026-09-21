@@ -1,4 +1,5 @@
 <?php
+// Integrate Blesta invoices with the local view-only payment agent.
 
 class Xmrpay extends NonmerchantGateway
 {
@@ -73,7 +74,6 @@ class Xmrpay extends NonmerchantGateway
                 'network' => $this->meta['network'],
                 'nonce' => bin2hex(random_bytes(8))
             ];
-            // ponytail: a checkout reload creates a fresh address; persist quotes if stable retries become necessary.
             $id = $this->encodeOrder($data);
             $order = $this->agent('/order', ['id' => $id, 'amount' => $xmr, 'label' => 'Blesta invoice']);
             if (!isset($order['address'], $order['amount']) || bccomp((string)$order['amount'], $xmr, 12) !== 0) {
@@ -98,6 +98,11 @@ class Xmrpay extends NonmerchantGateway
     {
         $raw = file_get_contents('php://input', false, null, 0, 65537);
         $signature = $_SERVER['HTTP_X_XMR_PAY_SIGNATURE'] ?? '';
+        return $this->validateEvent($raw, $signature);
+    }
+
+    private function validateEvent(string $raw, string $signature)
+    {
         $expected = 'sha256=' . hash_hmac('sha256', $raw, $this->meta['webhook_secret'] ?? '');
         if (strlen($raw) > 65536 || strlen($this->meta['webhook_secret'] ?? '') < 32 || !hash_equals($expected, $signature)) {
             http_response_code(400);
@@ -123,10 +128,26 @@ class Xmrpay extends NonmerchantGateway
             $this->Input->setErrors(['xmrpay' => ['amount' => 'Payment amount mismatch.']]);
             return null;
         }
-        Loader::loadModels($this, ['Transactions']);
+        Loader::loadModels($this, ['Transactions', 'Invoices']);
         $transactionId = $this->transactionId($id);
-        if ($this->Transactions->getByTransactionId($transactionId)) {
+        Loader::loadComponents($this, ['Record']);
+        $lock = hash('sha256', 'xmrpay:' . $transactionId);
+        $acquired = $this->Record->query('SELECT GET_LOCK(?, 0)', [$lock])->fetchColumn();
+        if ((int)$acquired !== 1) {
+            http_response_code(503);
+            $this->Input->setErrors(['xmrpay' => ['busy' => 'Payment callback is already processing.']]);
             return null;
+        }
+        register_shutdown_function(function () use ($lock) {
+            $this->Record->query('SELECT RELEASE_LOCK(?)', [$lock]);
+        });
+        $transaction = $this->Transactions->getByTransactionId($transactionId);
+        $invoices = $data['invoices'];
+        if ($transaction && $transaction->status === 'approved') {
+            $invoices = $this->remainingInvoices($transaction->id, $invoices);
+            if (!$invoices) {
+                return null;
+            }
         }
         try {
             $status = $this->agent('/order/' . rawurlencode($id));
@@ -142,7 +163,8 @@ class Xmrpay extends NonmerchantGateway
             $this->Input->setErrors(['xmrpay' => ['status' => 'Payment is not settled by the agent.']]);
             return null;
         }
-        // Blesta can acknowledge a callback even when storing or applying its transaction fails.
+        ob_start();
+
         register_shutdown_function(function () use ($transactionId, $data) {
             try {
                 $transaction = $this->Transactions->getByTransactionId($transactionId);
@@ -150,15 +172,8 @@ class Xmrpay extends NonmerchantGateway
                     http_response_code(503);
                     return;
                 }
-                $applied = [];
-                foreach ($this->Transactions->getApplied($transaction->id) as $row) {
-                    $applied[$row->invoice_id] = $row->applied_amount;
-                }
-                foreach ($data['invoices'] as $invoice) {
-                    if (bccomp((string)($applied[$invoice['id']] ?? '0'), (string)$invoice['amount'], 4) < 0) {
-                        http_response_code(503);
-                        return;
-                    }
+                if ($this->remainingInvoices($transaction->id, $data['invoices'])) {
+                    http_response_code(503);
                 }
             } catch (Throwable $e) {
                 http_response_code(503);
@@ -168,7 +183,7 @@ class Xmrpay extends NonmerchantGateway
             'client_id' => $data['client'],
             'amount' => $data['amount'],
             'currency' => $data['currency'],
-            'invoices' => $data['invoices'],
+            'invoices' => $invoices,
             'status' => 'approved',
             'transaction_id' => $transactionId
         ];
@@ -177,6 +192,26 @@ class Xmrpay extends NonmerchantGateway
     public function success(array $get, array $post)
     {
         return ['status' => 'pending'];
+    }
+
+    private function remainingInvoices($transactionId, array $invoices): array
+    {
+        $applied = [];
+        foreach ($this->Transactions->getApplied($transactionId) as $row) {
+            $applied[$row->invoice_id] = bcadd($applied[$row->invoice_id] ?? '0', (string)$row->applied_amount, 12);
+        }
+        $remaining = [];
+        foreach ($invoices as $invoice) {
+            $amount = bcsub((string)$invoice['amount'], $applied[$invoice['id']] ?? '0', 12);
+            if (bccomp($amount, '0', 12) > 0) {
+                $current = $this->Invoices->get($invoice['id']);
+                if (!$current || !isset($current->due)) { throw new RuntimeException('Invoice balance unavailable.'); }
+                if ($current->status === 'void' || bccomp((string)$current->due, '0', 12) <= 0) { continue; }
+                if (bccomp($amount, (string)$current->due, 12) > 0) { $amount = (string)$current->due; }
+                $remaining[] = ['id' => $invoice['id'], 'amount' => $amount];
+            }
+        }
+        return $remaining;
     }
 
     private function encodeOrder(array $data): string
@@ -210,7 +245,6 @@ class Xmrpay extends NonmerchantGateway
         curl_setopt_array($curl, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 8, CURLOPT_FOLLOWLOCATION => false, CURLOPT_USERAGENT => 'XMRPay-Blesta/1.0 (+https://xmrpay.shop/)']);
         $body = curl_exec($curl);
         $http = curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
-        curl_close($curl);
         $price = json_decode($body ?: '', true)['monero'][strtolower($currency)] ?? null;
         if ($http !== 200 || !is_numeric($price) || $price <= 0) {
             throw new RuntimeException('XMR exchange rate unavailable.');
@@ -234,7 +268,6 @@ class Xmrpay extends NonmerchantGateway
         curl_setopt_array($curl, [CURLOPT_RETURNTRANSFER => true, CURLOPT_HTTPHEADER => $headers, CURLOPT_TIMEOUT => 30, CURLOPT_FOLLOWLOCATION => false]);
         $response = curl_exec($curl);
         $http = curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
-        curl_close($curl);
         $result = json_decode($response ?: '', true);
         if ($http !== 200 || !is_array($result)) {
             throw new RuntimeException('XMRPay agent unavailable.');

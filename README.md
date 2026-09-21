@@ -19,4 +19,6 @@ The agent and Blesta need different secrets for each installation. Keep the agen
 
 `php tests/gateway.php`
 
-The test checks signed order metadata, tampering rejection, short transaction IDs, and XMR amount formatting. A live end-to-end test additionally requires a stagenet wallet and Blesta invoice.
+The test checks signed metadata, tampering rejection, lock contention, agent confirmation, duplicate callbacks, recovery after partial invoice application, invoices already paid through another transaction, and XMR amount formatting. Callback serialization uses MySQL/MariaDB advisory locks and holds the database connection until request shutdown. A live end-to-end test additionally requires a stagenet wallet and Blesta invoice.
+
+Each checkout reload creates a new quote and address. If several quotes are paid for the same invoice, each payment has its own transaction; amounts exceeding the remaining invoice balance stay as account credit.
