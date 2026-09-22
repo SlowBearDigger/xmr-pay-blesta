@@ -1,6 +1,6 @@
 <?php
 // Check signed callbacks, serialized processing and interrupted invoice application.
-if (PHP_SAPI === 'cli-server') {
+if (PHP_SAPI === 'cli-server' && parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH) !== '/callback') {
     header('Content-Type: application/json');
     echo json_encode(['paid' => true, 'amount' => '0.002']);
     return;
@@ -14,6 +14,7 @@ class NonmerchantGateway
     public $Transactions;
     public $Invoices;
     protected function loadConfig($path) {}
+    public function errors() { return $this->Input->errors; }
 }
 class Input {
     public $errors = [];
@@ -97,6 +98,12 @@ $check($remaining->invoke($gateway, 1, $data['invoices']) === []);
 $validate = new ReflectionMethod(Xmrpay::class, 'validateEvent');
 $body = json_encode(['event' => 'order.paid', 'order_id' => $id, 'network' => 'stagenet', 'amount_xmr' => '0.002']);
 $signature = 'sha256=' . hash_hmac('sha256', $body, str_repeat('a', 64));
+if (PHP_SAPI === 'cli-server') {
+    $gateway->Transactions->transaction = (object)['id' => 1, 'status' => 'approved'];
+    $gateway->validate([], []);
+    echo 'Callback continued into native payment processing';
+    return;
+}
 $check($validate->invoke($gateway, $body, 'invalid') === null && http_response_code() === 400);
 Record::$available = false;
 $check($validate->invoke($gateway, $body, $signature) === null && http_response_code() === 503);
@@ -116,6 +123,10 @@ try {
         usleep(20000);
     }
     $check((bool)$ready);
+    $curl = curl_init('http://' . $address . '/callback');
+    curl_setopt_array($curl, [CURLOPT_RETURNTRANSFER => true, CURLOPT_POSTFIELDS => $body, CURLOPT_HTTPHEADER => ['X-XMR-Pay-Signature: ' . $signature, 'Content-Type: application/json']]);
+    $ack = curl_exec($curl);
+    $check($ack === '' && curl_getinfo($curl, CURLINFO_RESPONSE_CODE) === 200);
     $gateway->setMeta(['webhook_secret' => str_repeat('a', 64), 'network' => 'stagenet', 'agent_url' => 'http://' . $address, 'agent_token' => 'test-token']);
     $gateway->Transactions->transaction = null;
     $gateway->Transactions->applied = [];

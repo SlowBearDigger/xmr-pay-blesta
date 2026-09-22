@@ -98,7 +98,13 @@ class Xmrpay extends NonmerchantGateway
     {
         $raw = file_get_contents('php://input', false, null, 0, 65537);
         $signature = $_SERVER['HTTP_X_XMR_PAY_SIGNATURE'] ?? '';
-        return $this->validateEvent($raw, $signature);
+        $response = $this->validateEvent($raw, $signature);
+        if ($response === null && !$this->errors()) {
+            // Blesta 6 continues processing null responses without gateway errors.
+            http_response_code(200);
+            exit;
+        }
+        return $response;
     }
 
     private function validateEvent(string $raw, string $signature)
