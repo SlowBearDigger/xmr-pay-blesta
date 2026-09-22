@@ -1,5 +1,9 @@
 # XMRPay for Blesta 6
 
+> **Draft: not ready for production.** The current code is an agent-based prototype. A PHP-native integration using Blesta cron is being developed so merchants will not need to install the XMRPay agent or Node.js. That implementation is not available yet.
+
+The instructions below describe the existing prototype.
+
 Nonmerchant gateway for a local XMRPay 2.0.0 view-only agent. It creates a unique Monero address for each checkout and records an invoice payment only after the agent confirms it on-chain.
 
 ## How payment detection works
