@@ -1,17 +1,49 @@
 <div class="mb-3">
+    <?php $this->Form->label('Primary wallet address', 'address', ['class' => 'form-label']); ?>
+    <?php $this->Form->fieldText('address', $meta['address'] ?? '', ['id' => 'address', 'class' => 'form-control']); ?>
+</div>
+<div class="mb-3">
+    <?php $this->Form->label('Private view key', 'view_key', ['class' => 'form-label']); ?>
+    <?php $this->Form->fieldPassword('view_key', ['value' => $meta['view_key'] ?? '', 'id' => 'view_key', 'class' => 'form-control', 'autocomplete' => 'off']); ?>
+    <p>Never enter a seed phrase or private spend key.</p>
+</div>
+<div class="mb-3">
+    <?php $this->Form->label('Monero nodes (one URL per line, or authenticated node JSON)', 'nodes', ['class' => 'form-label']); ?>
+    <?php $this->Form->fieldTextarea('nodes', $meta['nodes'] ?? '', ['id' => 'nodes', 'class' => 'form-control', 'rows' => 4]); ?>
+    <p>Use a monerod HTTP(S) RPC endpoint. For one trusted node, set Minimum distinct nodes to 1. Inside a container, 127.0.0.1 refers to that container.</p>
+</div>
+<?php
+$paymentSettings = [
+    'min_confirmations' => ['Confirmations required', 10],
+    'minimum_nodes' => ['Minimum distinct nodes', 2],
+    'index_offset' => ['Subaddress index offset', 1000000],
+    'invoice_minutes' => ['Quote validity in minutes', 60]
+];
+foreach ($paymentSettings as $field => [$label, $default]) { ?>
+<div class="mb-3">
+    <?php $this->Form->label($label, $field, ['class' => 'form-label']); ?>
+    <?php $this->Form->fieldText($field, $meta[$field] ?? $default, ['id' => $field, 'class' => 'form-control']); ?>
+</div>
+<?php } ?>
+<p>Install XMRPay Watch and run the Blesta cron every minute. Use a dedicated wallet or a subaddress index range reserved for this installation.</p>
+<details>
+<summary>Existing agent payments</summary>
+<p>Keep these settings only while previously issued agent payments remain outstanding.</p>
+<div class="mb-3">
     <?php $this->Form->label('Agent URL (loopback)', 'agent_url', ['class' => 'form-label']); ?>
     <?php $this->Form->fieldText('agent_url', $meta['agent_url'] ?? 'http://127.0.0.1:8792', ['id' => 'agent_url', 'class' => 'form-control']); ?>
 </div>
 <div class="mb-3">
     <?php $this->Form->label('Agent token', 'agent_token', ['class' => 'form-label']); ?>
-    <?php $this->Form->fieldText('agent_token', $meta['agent_token'] ?? '', ['id' => 'agent_token', 'class' => 'form-control']); ?>
+    <?php $this->Form->fieldPassword('agent_token', ['value' => $meta['agent_token'] ?? '', 'id' => 'agent_token', 'class' => 'form-control']); ?>
 </div>
 <div class="mb-3">
     <?php $this->Form->label('Webhook secret', 'webhook_secret', ['class' => 'form-label']); ?>
-    <?php $this->Form->fieldText('webhook_secret', $meta['webhook_secret'] ?? '', ['id' => 'webhook_secret', 'class' => 'form-control']); ?>
-</div>
-<div class="mb-3">
-    <?php $this->Form->label('Monero network', 'network', ['class' => 'form-label']); ?>
-    <?php $this->Form->fieldSelect('network', ['stagenet' => 'Stagenet', 'mainnet' => 'Mainnet'], $meta['network'] ?? 'stagenet', ['id' => 'network', 'class' => 'form-select']); ?>
+    <?php $this->Form->fieldPassword('webhook_secret', ['value' => $meta['webhook_secret'] ?? '', 'id' => 'webhook_secret', 'class' => 'form-control']); ?>
 </div>
 <p>Webhook URL: <code><?php echo $this->Html->safe(Configure::get('Blesta.gw_callback_url') . Configure::get('Blesta.company_id') . '/xmrpay/'); ?></code></p>
+</details>
+<div class="mb-3">
+    <?php $this->Form->label('Monero network', 'network', ['class' => 'form-label']); ?>
+    <?php $this->Form->fieldSelect('network', ['stagenet' => 'Stagenet', 'mainnet' => 'Mainnet', 'testnet' => 'Testnet'], $meta['network'] ?? 'stagenet', ['id' => 'network', 'class' => 'form-select']); ?>
+</div>

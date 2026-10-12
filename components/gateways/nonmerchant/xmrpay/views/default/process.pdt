@@ -1,7 +1,11 @@
 <div class="card"><div class="card-body">
     <h3>Pay with Monero</h3>
     <p>Send exactly <strong><?php echo $this->Html->safe($xmr_amount); ?> XMR</strong> on <strong><?php echo $this->Html->safe($network); ?></strong> to:</p>
-    <p style="overflow-wrap:anywhere"><code><?php echo $this->Html->safe($address); ?></code></p>
+    <p><code style="overflow-wrap:anywhere"><?php echo $this->Html->safe($address); ?></code></p>
     <p><a class="btn btn-primary" href="<?php echo $this->Html->safe($payment_uri); ?>">Open Monero wallet</a></p>
-    <p>Payment is recorded after network confirmation. Refresh the invoice to see its status.</p>
+    <?php if ($expires_at !== null) { ?>
+    <p>The full payment must be detected before <time datetime="<?php echo gmdate('c', $expires_at); ?>"><?php echo gmdate('Y-m-d H:i:s', $expires_at); ?> UTC</time>. Confirmations may arrive later.</p>
+    <p>Payments first detected or completed after this deadline require manual review. If you have already paid, contact support before paying again.</p>
+    <?php } ?>
+    <p>Refresh your invoice to check the payment status.</p>
 </div></div>

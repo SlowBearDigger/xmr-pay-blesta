@@ -1,5 +1,4 @@
 <?php
-// Integrate Blesta invoices with the local view-only payment agent.
 
 class Xmrpay extends NonmerchantGateway
 {
@@ -23,9 +22,31 @@ class Xmrpay extends NonmerchantGateway
         $this->meta = $meta ?? [];
     }
 
+    public function install()
+    {
+        foreach (['gmp', 'bcmath', 'curl', 'pdo_mysql'] as $extension) {
+            if (!extension_loaded($extension)) {
+                $this->Input->setErrors(['xmrpay' => ['extension' => 'XMRPay requires GMP, BCMath, cURL and PDO MySQL.']]);
+                return;
+            }
+        }
+        require_once __DIR__ . '/XmrpayOrderStore.php';
+        Loader::loadComponents($this, ['Record']);
+        try {
+            XmrpayOrderStore::installSchema($this->Record);
+        } catch (Throwable $error) {
+            $this->Input->setErrors(['xmrpay' => ['database' => 'Could not create XMRPay payment tables.']]);
+        }
+    }
+
+    public function upgrade($current_version)
+    {
+        $this->install();
+    }
+
     public function encryptableFields()
     {
-        return ['agent_token', 'webhook_secret'];
+        return ['view_key', 'nodes', 'agent_token', 'webhook_secret'];
     }
 
     public function getSettings(?array $meta = null)
@@ -39,6 +60,24 @@ class Xmrpay extends NonmerchantGateway
 
     public function editSettings(array $meta)
     {
+        if (!empty($meta['address']) || !empty($meta['view_key']) || !empty($meta['nodes'])) {
+            return $this->nativeSettings($meta);
+        }
+        Loader::loadComponents($this, ['Record']);
+        try {
+            $pending = $this->Record->query("SELECT 1 FROM gateway_xmrpay_orders
+                WHERE company_id = ? AND status = 'pending' LIMIT 1", [
+                (int)Configure::get('Blesta.company_id')
+            ])->fetchColumn();
+            if ($pending) {
+                $this->Input->setErrors(['xmrpay' => ['wallet' => 'Keep native wallet settings while issued XMRPay payments remain pending.']]);
+            }
+        } catch (PDOException $error) {
+            if ($error->getCode() !== '42S02') {
+                $this->Input->setErrors(['xmrpay' => ['database' => 'Could not verify pending XMRPay payments.']]);
+            }
+            $this->Record->reset();
+        }
         $url = rtrim((string)($meta['agent_url'] ?? ''), '/');
         if (!preg_match('~^http://127\.0\.0\.1:[0-9]{2,5}$~', $url)
             || strlen((string)($meta['agent_token'] ?? '')) < 32
@@ -54,6 +93,62 @@ class Xmrpay extends NonmerchantGateway
         ];
     }
 
+    private function nativeSettings(array $meta): array
+    {
+        require_once __DIR__ . '/load.php';
+        $settings = [
+            'address' => trim((string)($meta['address'] ?? '')),
+            'view_key' => strtolower(trim((string)($meta['view_key'] ?? ''))),
+            'nodes' => trim((string)($meta['nodes'] ?? '')),
+            'network' => (string)($meta['network'] ?? ''),
+        ];
+        try {
+            foreach ([
+                'min_confirmations' => [10, 1, 720],
+                'minimum_nodes' => [2, 1, 8],
+                'index_offset' => [1000000, 0, 2147483647],
+                'invoice_minutes' => [60, 1, 10080]
+            ] as $name => [$default, $minimum, $maximum]) {
+                $value = (string)($meta[$name] ?? $default);
+                if (!preg_match('/^[0-9]+$/D', $value) || (int)$value < $minimum || (int)$value > $maximum) {
+                    throw new InvalidArgumentException('Invalid native payment setting.');
+                }
+                $settings[$name] = (int)$value;
+            }
+            if (!in_array($settings['network'], ['mainnet', 'stagenet', 'testnet'], true)
+                || strlen($settings['address']) !== 95
+                || !preg_match('/^[a-f0-9]{64}$/D', $settings['view_key'])) {
+                throw new InvalidArgumentException('Invalid wallet configuration.');
+            }
+            $gateway = new \XmrPay\Adapter\Gateway($settings);
+            $keys = $gateway->verifyKeys();
+            $crypto = new \MoneroIntegrations\MoneroPhp\Cryptonote($settings['network']);
+            $decoded = $crypto->decode_address($settings['address']);
+            $primaryPrefixes = ['mainnet' => '12', 'stagenet' => '18', 'testnet' => '35'];
+            if (!$gateway->cryptoReady() || empty($keys['address_valid']) || empty($keys['key_match'])
+                || ($decoded['networkByte'] ?? '') !== $primaryPrefixes[$settings['network']]) {
+                throw new InvalidArgumentException('Wallet address and view key do not match.');
+            }
+            require_once __DIR__ . '/XmrpayOrderStore.php';
+            Loader::loadComponents($this, ['Record']);
+            $pending = $this->Record->query("SELECT 1 FROM gateway_xmrpay_orders
+                WHERE company_id = ? AND status = 'pending' AND wallet_id <> ? LIMIT 1", [
+                (int)Configure::get('Blesta.company_id'), XmrpayOrderStore::walletId($settings)
+            ])->fetchColumn();
+            if ($pending) {
+                $this->Input->setErrors(['xmrpay' => ['wallet' => 'Keep the wallet, network and index range unchanged while issued XMRPay payments remain pending.']]);
+            }
+            foreach (['agent_url', 'agent_token', 'webhook_secret'] as $name) {
+                if (!empty($meta[$name])) {
+                    $settings[$name] = (string)$meta[$name];
+                }
+            }
+        } catch (Throwable $error) {
+            $this->Input->setErrors(['xmrpay' => ['settings' => 'Enter a matching primary address and private view key, valid nodes, network and payment limits.']]);
+        }
+        return $settings;
+    }
+
     public function buildProcess(array $contact_info, $amount, ?array $invoice_amounts = null, ?array $options = null)
     {
         try {
@@ -63,6 +158,9 @@ class Xmrpay extends NonmerchantGateway
                 || !preg_match('/^\d+(?:\.\d{1,12})?$/', (string)$amount)
                 || bccomp((string)$amount, '0', 12) <= 0) {
                 throw new RuntimeException('Invalid payment amount or currency.');
+            }
+            if (!empty($this->meta['address']) && !empty($this->meta['view_key'])) {
+                return $this->nativeProcess((int)$contact_info['client_id'], (string)$amount, $currency, $invoice_amounts ?? []);
             }
             $xmr = $this->quote((string)$amount, $currency);
             $data = [
@@ -79,19 +177,56 @@ class Xmrpay extends NonmerchantGateway
             if (!isset($order['address'], $order['amount']) || bccomp((string)$order['amount'], $xmr, 12) !== 0) {
                 throw new RuntimeException('Agent did not create the order.');
             }
-            $this->view = new View('process', 'default');
-            $this->view->setDefaultView('components' . DS . 'gateways' . DS . 'nonmerchant' . DS . 'xmrpay' . DS);
-            Loader::loadHelpers($this, ['Html']);
-            $this->view->set('address', $order['address']);
-            $this->view->set('xmr_amount', $xmr);
-            $this->view->set('network', $this->meta['network']);
-            $this->view->set('payment_uri', 'monero:' . $order['address'] . '?tx_amount=' . rawurlencode($xmr));
-            return $this->view->fetch();
+            return $this->renderProcess($order['address'], $xmr);
+        } catch (XmrpayInvoiceBalanceChanged $error) {
+            $this->Input->setErrors(['xmrpay' => ['checkout' => 'The invoice balance has changed. Return to your invoices and start a new payment.']]);
+            return null;
         } catch (Throwable $e) {
-            error_log('XMRPay checkout: ' . $e->getMessage());
+            error_log('XMRPay checkout failed: ' . get_class($e));
             $this->Input->setErrors(['xmrpay' => ['checkout' => 'Could not create a Monero payment. Please try again.']]);
             return null;
         }
+    }
+
+    private function nativeProcess(int $clientId, string $amount, string $currency, array $allocations): string
+    {
+        require_once __DIR__ . '/XmrpayOrderStore.php';
+        Loader::loadModels($this, ['PluginManager', 'CronTasks']);
+        $task = $this->CronTasks->getTaskRunByKey('scan_payments', 'xmrpay_watch');
+        if (!$this->PluginManager->getByDir('xmrpay_watch', Configure::get('Blesta.company_id'))
+            || !$task || (int)$task->enabled !== 1) {
+            throw new RuntimeException('Install and enable XMRPay Watch before accepting payments.');
+        }
+        $config = $this->meta;
+        foreach (['minimum_nodes', 'min_confirmations', 'index_offset', 'invoice_minutes'] as $name) {
+            if (isset($config[$name])) {
+                $config[$name] = (int)$config[$name];
+            }
+        }
+        $gateway = new \XmrPay\Adapter\Gateway($config);
+        $gateway->scanner()->set_time_budget(8);
+        $health = $gateway->scanner()->node_health();
+        if (empty($health['ready'])) {
+            throw new RuntimeException('Configured Monero nodes are not ready.');
+        }
+        $birthday = max(1, (int)$health['nodes'][0]['height'] - 2);
+        $store = new XmrpayOrderStore((int)$this->gateway_id, $config);
+        $order = $store->checkout($clientId, $amount, $currency, $allocations,
+            fn(): string => $this->quote($amount, $currency), $birthday);
+        return $this->renderProcess($order['address'], $order['xmr_amount'], $order['expires_at']);
+    }
+
+    private function renderProcess(string $address, string $xmr, ?int $expiresAt = null): string
+    {
+        $this->view = new View('process', 'default');
+        $this->view->setDefaultView('components' . DS . 'gateways' . DS . 'nonmerchant' . DS . 'xmrpay' . DS);
+        Loader::loadHelpers($this, ['Html']);
+        $this->view->set('address', $address);
+        $this->view->set('xmr_amount', $xmr);
+        $this->view->set('network', $this->meta['network']);
+        $this->view->set('expires_at', $expiresAt);
+        $this->view->set('payment_uri', 'monero:' . $address . '?tx_amount=' . rawurlencode($xmr));
+        return $this->view->fetch();
     }
 
     public function validate(array $get, array $post)
