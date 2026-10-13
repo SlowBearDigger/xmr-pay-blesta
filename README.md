@@ -1,17 +1,19 @@
 # XMRPay for Blesta 6
 
 > Release candidate under validation. Do not deploy this snapshot for real funds.
-> The bundled experimental CARROT/FCMP++ engine has unresolved X25519 provenance
-> and licensing classification; see the [engine notice](https://github.com/SlowBearDigger/xmr-pay-php/blob/4d081522e0176531d4a61c2eda5bf8cd83b99b88/NOTICE).
+
+This branch targets classic Monero mainnet and bundles the classic RingCT engine.
+Experimental CARROT/FCMP++ support is maintained separately and is not included.
 
 The nonmerchant gateway derives payment subaddresses using the existing XMRPay
 PHP engine. The companion XMRPay Watch plugin scans Monero nodes through Blesta's
 cron and records confirmed payments using native Transactions and Invoices models.
 Native mode requires no XMRPay agent, Node.js, wallet files or wallet RPC service.
 
-The licensed laboratory verified a testnet payment through HTTP checkout, native
-accounting, invoice closure and service activation. Mainnet qualification,
-sustained scanner capacity and external provisioning modules remain pending.
+The licensed laboratory verified classic regtest payments through HTTP checkout,
+native accounting, invoice closure and service activation. Node-health metadata
+was simulated for that offline chain. Mainnet qualification, sustained scanner
+capacity and external provisioning modules remain pending.
 
 A primary address and private view key allow incoming-payment detection without
 spending authority. Never enter a seed or private spend key. The view key exposes
@@ -33,8 +35,8 @@ qualified by these tests.
    the matching paths in Blesta. Install or upgrade the gateway, then install
    XMRPay Watch under Settings > Company > Plugins.
 2. Configure XMRPay under Settings > Company > Payment Gateways with a matching
-   primary address, private view key and network. Enter node URLs as separate
-   lines or in the JSON format supported by the existing XMRPay engine.
+   primary address, private view key and network (Mainnet by default). Enter node
+   URLs as separate lines or in the JSON format supported by the existing engine.
 3. Choose a confirmation threshold and minimum healthy-node count. Defaults are
    10 confirmations and two nodes. Nodes must report the configured network and
    synchronized chain state; unavailable evidence leaves invoices unpaid.
@@ -130,11 +132,11 @@ revisions and a SHA-256 manifest. Account-key generation, the in-memory test sto
 and upstream research documents are excluded. No sibling checkout, Composer or
 package download is required at runtime.
 
-Build from a Git checkout with Bash, Git, GNU coreutils, sed, tar and zip. Use clean
+Build from a Git checkout with Bash, Git, GNU coreutils, tar and zip. Use clean
 local checkouts of these exact revisions; the bundler verifies both before copying:
 
-- [xmr-pay-php](https://github.com/SlowBearDigger/xmr-pay-php) at `4d081522e0176531d4a61c2eda5bf8cd83b99b88`.
-- [xmr-pay-adapter-core](https://github.com/SlowBearDigger/xmr-pay-adapter-core) at `d82e513a8796bb65a867116b3e716eb6c188086b`.
+- [xmr-pay-php](https://github.com/SlowBearDigger/xmr-pay-php) at `1eb8e34d0cf5049698f6591427356f53eae79c88`.
+- [xmr-pay-adapter-core](https://github.com/SlowBearDigger/xmr-pay-adapter-core) at `14cff31b99206d544db4b337f2fce356c631bfcf`.
 
 ```bash
 bash tools/bundle-engine.sh /path/to/xmr-pay-php /path/to/xmr-pay-adapter-core

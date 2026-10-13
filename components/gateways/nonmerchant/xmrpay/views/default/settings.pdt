@@ -45,5 +45,5 @@ foreach ($paymentSettings as $field => [$label, $default]) { ?>
 </details>
 <div class="mb-3">
     <?php $this->Form->label('Monero network', 'network', ['class' => 'form-label']); ?>
-    <?php $this->Form->fieldSelect('network', ['stagenet' => 'Stagenet', 'mainnet' => 'Mainnet', 'testnet' => 'Testnet'], $meta['network'] ?? 'stagenet', ['id' => 'network', 'class' => 'form-select']); ?>
+    <?php $this->Form->fieldSelect('network', ['mainnet' => 'Mainnet', 'stagenet' => 'Stagenet', 'testnet' => 'Testnet'], $meta['network'] ?? 'mainnet', ['id' => 'network', 'class' => 'form-select']); ?>
 </div>

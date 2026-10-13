@@ -2,6 +2,7 @@
 
 ## [1.1.0] - Unreleased
 
+- Default new installations to Mainnet and bundle the classic RingCT runtime.
 - Add PHP-native checkout and a Blesta cron plugin using the existing view-key engine.
 - Persist immutable quotes, resumable scans and uniquely claimed outputs in InnoDB.
 - Commit native accounting, validated invoice applications and payment state atomically.
