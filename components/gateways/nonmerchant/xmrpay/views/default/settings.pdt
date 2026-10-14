@@ -1,3 +1,23 @@
+<style>
+.xmrpay-settings { max-width: 960px; }
+.xmrpay-settings__intro { border-left: 4px solid #ff6600; padding-left: 16px; margin-bottom: 24px; }
+.xmrpay-settings fieldset { border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px; margin-bottom: 20px; min-width: 0; }
+.xmrpay-settings legend { float: none; width: auto; font-size: 1.1rem; font-weight: 600; padding: 0 6px; margin-bottom: 8px; }
+.xmrpay-settings .form-text { margin-bottom: 0; }
+.xmrpay-settings details { overflow-wrap: anywhere; }
+.xmrpay-settings summary { cursor: pointer; font-weight: 600; margin-bottom: 12px; }
+</style>
+<div class="xmrpay-settings">
+<div class="xmrpay-settings__intro">
+    <h3>Monero payments</h3>
+    <p>Receive payments with your primary address and private view key. XMRPay Watch checks incoming payments through your Monero nodes.</p>
+</div>
+<fieldset>
+<legend>Wallet</legend>
+<div class="mb-3">
+    <?php $this->Form->label('Monero network', 'network', ['class' => 'form-label']); ?>
+    <?php $this->Form->fieldSelect('network', ['mainnet' => 'Mainnet', 'stagenet' => 'Stagenet', 'testnet' => 'Testnet'], $meta['network'] ?? 'mainnet', ['id' => 'network', 'class' => 'form-select']); ?>
+</div>
 <div class="mb-3">
     <?php $this->Form->label('Primary wallet address', 'address', ['class' => 'form-label']); ?>
     <?php $this->Form->fieldText('address', $meta['address'] ?? '', ['id' => 'address', 'class' => 'form-control']); ?>
@@ -5,27 +25,40 @@
 <div class="mb-3">
     <?php $this->Form->label('Private view key', 'view_key', ['class' => 'form-label']); ?>
     <?php $this->Form->fieldPassword('view_key', ['value' => $meta['view_key'] ?? '', 'id' => 'view_key', 'class' => 'form-control', 'autocomplete' => 'off']); ?>
-    <p>Never enter a seed phrase or private spend key.</p>
+    <p class="form-text">Never enter a seed phrase or private spend key.</p>
 </div>
+</fieldset>
+<fieldset>
+<legend>Nodes</legend>
 <div class="mb-3">
     <?php $this->Form->label('Monero nodes (one URL per line, or authenticated node JSON)', 'nodes', ['class' => 'form-label']); ?>
     <?php $this->Form->fieldTextarea('nodes', $meta['nodes'] ?? '', ['id' => 'nodes', 'class' => 'form-control', 'rows' => 4]); ?>
-    <p>Use a monerod HTTP(S) RPC endpoint. For one trusted node, set Minimum distinct nodes to 1. Inside a container, 127.0.0.1 refers to that container.</p>
+    <p class="form-text">Use a monerod HTTP(S) RPC endpoint. For one trusted node, set Minimum distinct nodes to 1. Inside a container, 127.0.0.1 refers to that container.</p>
 </div>
+<div>
+    <?php $this->Form->label('Minimum distinct nodes', 'minimum_nodes', ['class' => 'form-label']); ?>
+    <?php $this->Form->fieldText('minimum_nodes', $meta['minimum_nodes'] ?? 2, ['id' => 'minimum_nodes', 'class' => 'form-control', 'inputmode' => 'numeric']); ?>
+</div>
+</fieldset>
+<fieldset>
+<legend>Payment rules</legend>
+<div class="row">
 <?php
 $paymentSettings = [
     'min_confirmations' => ['Confirmations required', 10],
-    'minimum_nodes' => ['Minimum distinct nodes', 2],
     'index_offset' => ['Subaddress index offset', 1000000],
     'invoice_minutes' => ['Quote validity in minutes', 60]
 ];
 foreach ($paymentSettings as $field => [$label, $default]) { ?>
-<div class="mb-3">
+<div class="col-md-6 mb-3">
     <?php $this->Form->label($label, $field, ['class' => 'form-label']); ?>
-    <?php $this->Form->fieldText($field, $meta[$field] ?? $default, ['id' => $field, 'class' => 'form-control']); ?>
+    <?php $this->Form->fieldText($field, $meta[$field] ?? $default, ['id' => $field, 'class' => 'form-control', 'inputmode' => 'numeric']); ?>
 </div>
 <?php } ?>
-<p>Install XMRPay Watch and run the Blesta cron every minute. Use a dedicated wallet or a subaddress index range reserved for this installation.</p>
+</div>
+<p class="form-text">Use a dedicated wallet or a subaddress index range reserved for this installation. Full payment must be detected before the quote expires; confirmations may arrive later. Late payments require staff review under Tools &gt; Monero Payments.</p>
+</fieldset>
+<p>Install XMRPay Watch and run the Blesta cron every minute.</p>
 <details>
 <summary>Existing agent payments</summary>
 <p>Keep these settings only while previously issued agent payments remain outstanding.</p>
@@ -43,7 +76,4 @@ foreach ($paymentSettings as $field => [$label, $default]) { ?>
 </div>
 <p>Webhook URL: <code><?php echo $this->Html->safe(Configure::get('Blesta.gw_callback_url') . Configure::get('Blesta.company_id') . '/xmrpay/'); ?></code></p>
 </details>
-<div class="mb-3">
-    <?php $this->Form->label('Monero network', 'network', ['class' => 'form-label']); ?>
-    <?php $this->Form->fieldSelect('network', ['mainnet' => 'Mainnet', 'stagenet' => 'Stagenet', 'testnet' => 'Testnet'], $meta['network'] ?? 'mainnet', ['id' => 'network', 'class' => 'form-select']); ?>
 </div>

@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.3] - Unreleased
+
+- Reuse the XMRPay payment card with the exact amount, network, address and late-payment guidance.
+- Generate payment QR codes with Blesta's bundled library in SVG format, without requiring GD or an external service.
+- Add address copying with a selection fallback and an explicit failure message.
+- Group wallet, node and payment settings using Blesta's responsive form components.
+- Verify native and plugin-prefixed checkout routes and dense-block recovery, accounting and queue progress on stock Blesta.
+
 ## [1.1.2] - Unreleased
 
 - Validate invoice ownership and unique selections before native checkout renders or stores payment allocations.

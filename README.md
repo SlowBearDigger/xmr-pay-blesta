@@ -1,7 +1,5 @@
 # XMRPay for Blesta 6
 
-> Release candidate under validation. Do not deploy this snapshot for real funds.
-
 This branch targets classic Monero mainnet and bundles the classic RingCT engine.
 Experimental CARROT/FCMP++ support is maintained separately and is not included.
 
@@ -18,10 +16,15 @@ closure and None-module activation on stock Blesta 6.0.3 through a real
 third-party HTTPS node. The earlier 0.03 XMR test used a locally patched platform.
 Read-only scanning of a historical mainnet RingCT transaction also passed against
 a live daemon.
-A fresh merchant payment on mainnet remains unqualified. Service activation uses
-Blesta's None module; external provisioning modules need their own integration
-checks. Queue and recovery measurements used a sparse, stationary test chain;
-they do not establish throughput on dense mainnet blocks.
+Payment validation uses valueless test networks; no fresh mainnet transfer was
+made. Service activation uses Blesta's None module; external provisioning modules
+need their own integration checks. An isolated dense-block test also verified
+interrupted scans, node failure, concurrent workers and settlement replay with
+128 real RingCT transactions in one 277603-byte block on stock Blesta.
+Nine unpaid requests finished scanning that block in eight scheduled turns,
+with 160 seconds of active processing. These stationary-chain measurements do
+not establish capacity for a continuously growing dense chain. Monitor the
+pending queue and scan delay on the target installation.
 
 A primary address and private view key allow incoming-payment detection without
 spending authority. Never enter a seed or private spend key. The view key exposes
@@ -108,6 +111,12 @@ PHP cURL's CA trust for a private certificate authority. Both checkout PHP and
 cron PHP must have the same node reachability and CA configuration.
 
 ## Payment behavior
+
+The checkout reuses the XMRPay card and displays the network, exact amount,
+address and payment deadline. Its QR code is generated locally with Blesta's
+bundled library; no QR service or additional dependency is required. The address,
+QR and wallet link remain available without JavaScript. Address copying reports
+failure when the browser denies clipboard access and its selection fallback.
 
 Checkout stores its exact quote, address, allocations and scan birthday. Reloading
 an active request preserves these values. Default expiry is 60 minutes. The full

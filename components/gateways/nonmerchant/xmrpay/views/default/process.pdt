@@ -1,11 +1,171 @@
-<div class="card"><div class="card-body">
-    <h3>Pay with Monero</h3>
-    <p>Send exactly <strong><?php echo $this->Html->safe($xmr_amount); ?> XMR</strong> on <strong><?php echo $this->Html->safe($network); ?></strong> to:</p>
-    <p><code style="overflow-wrap:anywhere"><?php echo $this->Html->safe($address); ?></code></p>
-    <p><a class="btn btn-primary" href="<?php echo $this->Html->safe($payment_uri); ?>">Open Monero wallet</a></p>
-    <?php if ($expires_at !== null) { ?>
-    <p>The full payment must be detected before <time datetime="<?php echo gmdate('c', $expires_at); ?>"><?php echo gmdate('Y-m-d H:i:s', $expires_at); ?> UTC</time>. Confirmations may arrive later.</p>
-    <p>Payments first detected or completed after this deadline require manual review. If you have already paid, contact support before paying again.</p>
-    <?php } ?>
-    <p>Refresh your invoice to check the payment status.</p>
-</div></div>
+<style>
+.xmrpay-pay {
+    --xmr: #ff6600;
+    --ink: #1a1a1a;
+    --muted: #626873;
+    --line: #e5e7eb;
+    max-width: 480px;
+    margin: 24px auto;
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, .06);
+    color: var(--ink);
+    line-height: 1.45;
+}
+.xmrpay-pay * { box-sizing: border-box; }
+.xmrpay-pay__bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--line);
+}
+.xmrpay-pay__brand { font-weight: 700; font-size: 15px; }
+.xmrpay-pay__mono {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    margin-right: 6px;
+    border-radius: 7px;
+    background: var(--xmr);
+    color: var(--ink);
+}
+.xmrpay-pay__net { font-size: 12px; color: var(--muted); text-transform: uppercase; }
+.xmrpay-pay__body { padding: 24px 20px; text-align: center; }
+.xmrpay-pay__title { margin: 0 0 8px; font-size: 20px; font-weight: 700; }
+.xmrpay-pay__sub { font-size: 13px; color: var(--muted); }
+.xmrpay-pay__amount {
+    font-size: 30px;
+    font-weight: 700;
+    color: #b84700;
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+}
+.xmrpay-pay__amount span { font-size: 18px; color: var(--ink); }
+.xmrpay-pay__qr { display: block; width: 232px; max-width: 100%; height: auto; margin: 20px auto; }
+.xmrpay-pay__label { text-align: left; font-size: 12px; font-weight: 600; }
+.xmrpay-pay__addr { display: flex; gap: 8px; }
+.xmrpay-pay__addr code {
+    flex: 1;
+    min-width: 0;
+    background: #f9fafb;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 12px;
+    text-align: left;
+    overflow-wrap: anywhere;
+    color: var(--ink);
+}
+.xmrpay-pay__copy {
+    min-height: 44px;
+    border: 1px solid var(--line);
+    background: #fff;
+    border-radius: 10px;
+    padding: 0 14px;
+    color: var(--ink);
+    cursor: pointer;
+}
+.xmrpay-pay__open {
+    display: block;
+    min-height: 44px;
+    margin: 18px 0;
+    padding: 13px;
+    border-radius: 11px;
+    background: #b84700;
+    color: #fff;
+    font-weight: 700;
+    text-decoration: none;
+}
+.xmrpay-pay__open:hover { background: #963a00; color: #fff; }
+.xmrpay-pay__copy:focus-visible, .xmrpay-pay__open:focus-visible { outline: 2px solid var(--xmr); outline-offset: 2px; }
+.xmrpay-pay__notice {
+    background: #fff7ed;
+    border: 1px solid #fed7aa;
+    color: #9a3412;
+    border-radius: 10px;
+    padding: 12px 14px;
+    font-size: 13px;
+    text-align: left;
+}
+@media (max-width: 480px) {
+    .xmrpay-pay__addr { flex-direction: column; }
+}
+</style>
+<div class="xmrpay-pay" id="xmrpay-pay">
+    <div class="xmrpay-pay__bar">
+        <span class="xmrpay-pay__brand"><span class="xmrpay-pay__mono" aria-hidden="true">ɱ</span> xmr-pay</span>
+        <span class="xmrpay-pay__net"><?php echo $this->Html->safe($network); ?></span>
+    </div>
+    <div class="xmrpay-pay__body">
+        <h3 class="xmrpay-pay__title">Pay with Monero</h3>
+        <p class="xmrpay-pay__sub">Scan the code or copy the address into your wallet. Send exactly:</p>
+        <div class="xmrpay-pay__amount"><?php echo $this->Html->safe($xmr_amount); ?> <span>XMR</span></div>
+        <?php
+        $qrOptions = new \chillerlan\QRCode\QROptions(['outputType' => \chillerlan\QRCode\QRCode::OUTPUT_MARKUP_SVG]);
+        $qrImage = (new \chillerlan\QRCode\QRCode($qrOptions))->render($payment_uri);
+        ?>
+        <img class="xmrpay-pay__qr" src="<?php echo $this->Html->safe($qrImage); ?>" alt="Monero payment QR code" />
+        <p class="xmrpay-pay__label" id="xmrpay-addr-label">Send to this address</p>
+        <div class="xmrpay-pay__addr">
+            <code id="xmrpay-addr" aria-labelledby="xmrpay-addr-label"><?php echo $this->Html->safe($address); ?></code>
+            <button type="button" class="xmrpay-pay__copy" id="xmrpay-copy" aria-label="Copy the Monero address" hidden>Copy</button>
+        </div>
+        <p class="xmrpay-pay__sub" id="xmrpay-copy-status" role="status"></p>
+        <a class="xmrpay-pay__open" href="<?php echo $this->Html->safe($payment_uri); ?>">Open Monero wallet</a>
+        <?php if ($expires_at !== null) { ?>
+        <div class="xmrpay-pay__notice">
+            <p>The full payment must be detected before <time datetime="<?php echo gmdate('c', $expires_at); ?>"><?php echo gmdate('Y-m-d H:i:s', $expires_at); ?> UTC</time>. Confirmations may arrive later.</p>
+            <p>Payments first detected or completed after this deadline require manual review. If you have already paid, contact support before paying again.</p>
+        </div>
+        <?php } ?>
+        <p class="xmrpay-pay__sub">Refresh your invoice to check the payment status.</p>
+    </div>
+</div>
+<script>
+(function () {
+    var button = document.getElementById('xmrpay-copy');
+    var address = document.getElementById('xmrpay-addr');
+    var status = document.getElementById('xmrpay-copy-status');
+    button.hidden = false;
+
+    function copied() {
+        status.textContent = 'Address copied.';
+    }
+
+    function fallback() {
+        var selection = window.getSelection();
+        var success = false;
+        try {
+            var range = document.createRange();
+            range.selectNodeContents(address);
+            selection.removeAllRanges();
+            selection.addRange(range);
+            success = document.execCommand('copy');
+        } catch (error) {}
+        if (success) {
+            selection.removeAllRanges();
+            copied();
+        } else {
+            status.textContent = 'Copy failed. Select the address manually.';
+        }
+    }
+
+    button.addEventListener('click', function () {
+        status.textContent = '';
+        try {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(address.textContent).then(copied, fallback);
+            } else {
+                fallback();
+            }
+        } catch (error) {
+            fallback();
+        }
+    });
+})();
+</script>
