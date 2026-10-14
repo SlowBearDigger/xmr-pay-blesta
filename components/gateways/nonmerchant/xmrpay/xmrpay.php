@@ -193,9 +193,10 @@ class Xmrpay extends NonmerchantGateway
         require_once __DIR__ . '/XmrpayOrderStore.php';
         Loader::loadModels($this, ['PluginManager', 'CronTasks']);
         $task = $this->CronTasks->getTaskRunByKey('scan_payments', 'xmrpay_watch');
-        if (!$this->PluginManager->getByDir('xmrpay_watch', Configure::get('Blesta.company_id'))
+        if (Configure::get('Xmrpay.checkout_guard') !== true
+            || !$this->PluginManager->getByDir('xmrpay_watch', Configure::get('Blesta.company_id'))
             || !$task || (int)$task->enabled !== 1) {
-            throw new RuntimeException('Install and enable XMRPay Watch before accepting payments.');
+            throw new RuntimeException('Install, upgrade and enable XMRPay Watch before accepting payments.');
         }
         $config = $this->meta;
         foreach (['minimum_nodes', 'min_confirmations', 'index_offset', 'invoice_minutes'] as $name) {

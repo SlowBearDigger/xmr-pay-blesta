@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.1.2] - Unreleased
+
+- Validate invoice ownership and unique selections before native checkout renders or stores payment allocations.
+- Reject malformed invoice and amount inputs and clear invalid payment sessions.
+- Preserve signed guest links, partial payments and account credit through Blesta's native payment flow.
+- Require the upgraded Watch event before creating native XMRPay quotes.
+- Reuse each node's cURL connection while resetting request options between RPC calls.
+- Rotate the first scan turn independently from shorter attempts so pending requests receive the full available batch budget.
+
 ## [1.1.1] - Unreleased
 
 - Add a native Monero Payments page with separate viewing and late-acceptance permissions.

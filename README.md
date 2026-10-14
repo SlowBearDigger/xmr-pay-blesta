@@ -13,8 +13,9 @@ Native mode requires no XMRPay agent, Node.js, wallet files or wallet RPC servic
 The licensed Apache/HTTPS laboratory verified classic regtest payments through
 checkout, native accounting, invoice closure, late acceptance and service activation.
 Node-health metadata was simulated only for that offline chain. A separate fresh
-0.03 XMR stagenet payment completed HTTPS checkout, native accounting, invoice
-closure and None-module activation through a real third-party HTTPS node.
+0.003 XMR stagenet payment completed HTTPS checkout, native accounting, invoice
+closure and None-module activation on stock Blesta 6.0.3 through a real
+third-party HTTPS node. The earlier 0.03 XMR test used a locally patched platform.
 Read-only scanning of a historical mainnet RingCT transaction also passed against
 a live daemon.
 A fresh merchant payment on mainnet remains unqualified. Service activation uses
@@ -36,20 +37,22 @@ PHP 8.3.35, ionCube 15.5 and MariaDB 11.4.13. Blesta's bundled Minphp Date raise
 an installation deprecation exception under PHP 8.4; that combination is not
 qualified by these tests.
 
-The validated Blesta 6.0.3 installation includes four local fixes for invoice
-selection, payment ownership, missing invoices and HTTP error status handling.
-Those licensed-platform patches are maintained separately from this package.
-In an unmodified installation, repeated invoice selections can inflate a checkout
-quote, and the native payment page can disclose another client's invoice details
-before invoking the gateway. These two defects block qualification of the stock
-platform. Preserve the reviewed patch set and rerun its regressions when upgrading
-Blesta, or obtain vendor fixes that address the same behavior.
+XMRPay Watch must remain installed, upgraded and enabled. Its native pre-action
+event validates invoice ownership, unique invoice selections and payment input
+types before Blesta renders checkout. This protects against duplicate quotes and
+foreign invoice disclosure in stock Blesta 6.0.3 without changing platform files.
+It preserves signed guest links, partial payments and account credit. The checks
+cover the native payment pages, including selections made before choosing a gateway.
+XMRPay refuses new native quotes if the event has not run. Disabling Watch removes
+its protection from Blesta's payment pages; the gateway cannot protect pages that
+run before it is invoked. Revalidate the integration when upgrading Blesta.
 
 1. Extract the built installation ZIP. GitHub's automatic source archives do not
    include the bundled engine; build them from a Git checkout as described below.
    Copy `components/gateways/nonmerchant/xmrpay` and `plugins/xmrpay_watch` into
    the matching paths in Blesta. Install or upgrade the gateway, then install
-   XMRPay Watch under Settings > Company > Plugins.
+   or upgrade XMRPay Watch under Settings > Company > Plugins. Replacing files
+   alone does not register the plugin's event handlers or migrate the scan queue.
    After upgrading the plugin, grant the Monero payment permissions to the
    appropriate staff groups under Settings > System > Staff > Staff Groups.
    Viewing requests and accepting late payments have separate permissions.
@@ -141,6 +144,8 @@ blocks or slow nodes can make it longer. Measure backlog on the target installat
 and keep scan delays below the quote expiry. Expired requests continue to be watched
 because they can still receive funds.
 An unsuccessful attempt does not prevent later pending requests receiving work.
+The first scan turn rotates separately from shorter attempts at the end of a
+batch, so a request cannot stay in the last position with insufficient scan time.
 Node timeouts, corrupt evidence, ownership errors or failed accounting checks
 leave the request pending. Monitor the Blesta cron logs and investigate repeated
 failures before accepting more payments.
@@ -170,7 +175,7 @@ package download is required at runtime.
 Build from a Git checkout with Bash, Git, GNU coreutils, tar and zip. Use clean
 local checkouts of these exact revisions; the bundler verifies both before copying:
 
-- [xmr-pay-php](https://github.com/SlowBearDigger/xmr-pay-php) at `594cdeaf4803c35f202bd3a677c5d8b1279a9f60`.
+- [xmr-pay-php](https://github.com/SlowBearDigger/xmr-pay-php) at `d62364c34ffef5e3318304eb726262f4f9be11de`.
 - [xmr-pay-adapter-core](https://github.com/SlowBearDigger/xmr-pay-adapter-core) at `90699b3123338ff39093d942ec0cd1a17f6447ad`.
 
 ```bash

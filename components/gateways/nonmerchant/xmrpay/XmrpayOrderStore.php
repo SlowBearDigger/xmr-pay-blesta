@@ -71,10 +71,17 @@ class XmrpayOrderStore implements OutputOrderStore
             transaction_id INT UNSIGNED DEFAULT NULL,
             created_at BIGINT UNSIGNED NOT NULL,
             last_scanned_at BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            scan_priority BIGINT UNSIGNED NOT NULL DEFAULT 0,
             PRIMARY KEY (id),
             UNIQUE KEY active_quote (active_key),
-            KEY pending_scan (gateway_id, status, last_scanned_at, id)
+            KEY pending_scan (gateway_id, status, scan_priority, last_scanned_at, id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        if (!$record->query("SHOW COLUMNS FROM gateway_xmrpay_orders LIKE 'scan_priority'")->fetch()) {
+            $record->query('ALTER TABLE gateway_xmrpay_orders
+                ADD COLUMN scan_priority BIGINT UNSIGNED NOT NULL DEFAULT 0,
+                DROP INDEX pending_scan,
+                ADD INDEX pending_scan (gateway_id, status, scan_priority, last_scanned_at, id)');
+        }
         $record->query("CREATE TABLE IF NOT EXISTS gateway_xmrpay_outputs (
             network VARCHAR(8) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
             txid CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
@@ -131,10 +138,10 @@ class XmrpayOrderStore implements OutputOrderStore
                 'funded_amount_atomic' => null
             ];
             $this->Record->query('INSERT INTO gateway_xmrpay_orders
-                (gateway_id, company_id, client_id, wallet_id, active_key, amount, currency, xmr_amount, address, allocations, state, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
+                (gateway_id, company_id, client_id, wallet_id, active_key, amount, currency, xmr_amount, address, allocations, state, created_at, scan_priority)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
                 $this->gatewayId, $this->companyId, $clientId, $this->walletId, $activeKey, $amount, $currency,
-                $xmrAmount, '', json_encode($allocations, JSON_THROW_ON_ERROR), json_encode($state, JSON_THROW_ON_ERROR), $now
+                $xmrAmount, '', json_encode($allocations, JSON_THROW_ON_ERROR), json_encode($state, JSON_THROW_ON_ERROR), $now, $now
             ]);
             $id = (int)$this->connection->lastInsertId();
             if ($id + (int)($this->config['index_offset'] ?? 1000000) > 2147483647) {
@@ -171,7 +178,7 @@ class XmrpayOrderStore implements OutputOrderStore
     {
         $rows = $this->Record->query("SELECT * FROM gateway_xmrpay_orders
             WHERE gateway_id = ? AND company_id = ? AND wallet_id = ? AND status = 'pending'
-            ORDER BY last_scanned_at, id LIMIT 25", [$this->gatewayId, $this->companyId, $this->walletId])->fetchAll(PDO::FETCH_ASSOC);
+            ORDER BY scan_priority, last_scanned_at, id LIMIT 25", [$this->gatewayId, $this->companyId, $this->walletId])->fetchAll(PDO::FETCH_ASSOC);
         foreach ($rows as $row) {
             try {
                 $order = $this->decodeOrder($row);
@@ -184,11 +191,13 @@ class XmrpayOrderStore implements OutputOrderStore
         }
     }
 
-    public function markScanAttempt(int $orderId): void
+    public function markScanAttempt(int $orderId, bool $advancePriority = true): void
     {
-        $this->Record->query('UPDATE gateway_xmrpay_orders SET last_scanned_at = ?
+        $now = time();
+        $this->Record->query('UPDATE gateway_xmrpay_orders
+            SET last_scanned_at = ?, scan_priority = IF(?, ?, scan_priority)
             WHERE id = ? AND gateway_id = ? AND company_id = ? AND status = ?', [
-            time(), $orderId, $this->gatewayId, $this->companyId, 'pending'
+            $now, (int)$advancePriority, $now, $orderId, $this->gatewayId, $this->companyId, 'pending'
         ]);
     }
 
