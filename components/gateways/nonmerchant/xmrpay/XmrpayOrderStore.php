@@ -6,6 +6,7 @@ require_once __DIR__ . '/load.php';
 use XmrPay\Adapter\Gateway;
 use XmrPay\Adapter\InvoicePolicy;
 use XmrPay\Adapter\OutputOrderStore;
+use XmrPay\Adapter\Settler;
 use XmrPay\Util;
 
 class XmrpayInvoiceBalanceChanged extends RuntimeException
@@ -242,6 +243,61 @@ class XmrpayOrderStore implements OutputOrderStore
 
     public function markPaidFromOutputs(int $orderId, array $receipts, array $verdict): void
     {
+        $this->settleOutputs($orderId, $receipts, $verdict);
+    }
+
+    public function acceptLatePayment(int $orderId, int $staffId, string $reason): void
+    {
+        $reason = trim($reason);
+        if ($staffId < 1 || $reason === '' || strlen($reason) > 500) {
+            throw new InvalidArgumentException('A staff member and review reason are required.');
+        }
+        $lock = hash('sha256', 'xmrpay-watch:' . $this->gatewayId);
+        if ((int)$this->Record->query('SELECT GET_LOCK(?, 0)', [$lock])->fetchColumn() !== 1) {
+            throw new RuntimeException('Payment scanning is already in progress.');
+        }
+        try {
+            $order = $this->loadOne($orderId);
+            if ($order['status'] === 'paid') {
+                return;
+            }
+            if ($order['wallet_id'] !== $this->walletId || $order['status'] !== 'pending'
+                || !in_array($order['invoice_status'] ?? '', ['review', 'expired'], true)
+                || ($order['closed_reason'] ?? '') !== 'expired') {
+                throw new RuntimeException('Payment is not eligible for late acceptance.');
+            }
+            $deadline = microtime(true) + 20;
+            $gateway = new Gateway($this->config);
+            $gateway->scanner()->set_time_budget(8);
+            if (empty($gateway->scanner()->node_health()['ready'])) {
+                throw new RuntimeException('Payment nodes are not ready.');
+            }
+            $this->markScanAttempt($orderId);
+            $confirmations = (int)($this->config['min_confirmations'] ?? 10);
+            $remaining = $deadline - microtime(true);
+            $gateway->scanner()->set_time_budget($remaining);
+            $report = (new Settler($gateway, $this, [
+                'min_confirmations' => $confirmations, 'time_budget' => $remaining, 'max_blocks' => 128
+            ]))->settleOrder($order);
+            $order = $this->loadOne($orderId);
+            if ($report['status'] !== 'ok' || ($report['scan_status'] ?? '') !== 'complete'
+                || ($order['scan_complete'] ?? false) !== true
+                || !is_int($order['scan_checkpoint']['height'] ?? null)) {
+                throw new RuntimeException('A complete current payment scan is required.');
+            }
+            $tip = $order['scan_checkpoint']['height'] + 1;
+            $verdict = $gateway->summarizeMatches($order['matches'], $order['xmr_amount'], $tip, $confirmations);
+            $receipts = $gateway->confirmedOutputs($order['matches'], $tip, $confirmations);
+            $this->settleOutputs($orderId, $receipts, $verdict, [
+                'staff_id' => $staffId, 'accepted_at' => time(), 'reason' => $reason
+            ]);
+        } finally {
+            $this->Record->query('SELECT RELEASE_LOCK(?)', [$lock]);
+        }
+    }
+
+    private function settleOutputs(int $orderId, array $receipts, array $verdict, ?array $approval = null): void
+    {
         $this->begin();
         try {
             $order = $this->lockOrder($orderId);
@@ -252,7 +308,7 @@ class XmrpayOrderStore implements OutputOrderStore
             if ($order['wallet_id'] !== $this->walletId) {
                 throw new RuntimeException('Payment wallet configuration changed.');
             }
-            InvoicePolicy::assertPayable($order, $verdict);
+            InvoicePolicy::assertPayable($order, $verdict, $approval !== null);
             $this->validateInvoices($order['client_id'], $order['currency'], $order['allocations'], $order['amount'], true);
             $received = '0';
             foreach ($receipts as $receipt) {
@@ -320,6 +376,9 @@ class XmrpayOrderStore implements OutputOrderStore
             $state['invoice_status'] = 'settled';
             $state['received_pico'] = $received;
             $state['overpaid_pico'] = bcsub($received, $expected, 0);
+            if ($approval !== null) {
+                $state['late_acceptance'] = $approval;
+            }
             $this->Record->query("UPDATE gateway_xmrpay_orders SET status = 'paid', active_key = NULL,
                 state = ?, transaction_id = ? WHERE id = ?", [json_encode($state, JSON_THROW_ON_ERROR), $transactionId, $orderId]);
             $this->assertAccounting((int)$transactionId, $order, $creditedAmount, $reference);

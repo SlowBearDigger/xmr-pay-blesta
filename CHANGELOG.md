@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.1.1] - Unreleased
+
+- Add a native Monero Payments page with separate viewing and late-acceptance permissions.
+- Verify late payments again before accepting the original quote, preserving atomic output claims and accounting.
+- Record the accepting staff member, time and reason with the payment; preserve them on retries.
+- Deny administrative access until the plugin permissions are registered and granted.
+- Decode legacy RingCT amounts and masks using Monero's scalar encoding while retaining compact RingCT support.
+- Let slow-node scans use the remaining cron budget so canonical rechecks can complete.
+
 ## [1.1.0] - Unreleased
 
 - Default new installations to Mainnet and bundle the classic RingCT runtime.

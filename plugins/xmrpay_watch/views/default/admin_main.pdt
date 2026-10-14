@@ -1,0 +1,95 @@
+<?php
+echo $message ?? null;
+$this->Widget->clear();
+$links = [];
+foreach (['all', 'pending', 'review'] as $category) {
+    $links[] = [
+        'name' => $this->_('AdminMain.index.' . $category, true),
+        'current' => $filter === $category,
+        'attributes' => ['href' => $this->base_uri . 'plugin/xmrpay_watch/admin_main/?filter=' . $category]
+    ];
+}
+$this->Widget->setLinks($links);
+$this->Widget->setBodyWrapper(false);
+$this->Widget->create($this->_('AdminMain.index.page_title', true), ['id' => 'xmrpay_payments'], $render_section ?? null);
+?>
+<p class="p-3 mb-0"><?php $this->_('AdminMain.index.description'); ?></p>
+<div class="table-responsive">
+    <table class="table table-hover mb-0">
+        <thead>
+            <tr>
+                <?php foreach (['order', 'quote', 'received', 'status', 'expiry', 'scanned', 'action'] as $heading) { ?>
+                    <th scope="col"><?php $this->_('AdminMain.index.' . $heading); ?></th>
+                <?php } ?>
+            </tr>
+        </thead>
+        <tbody>
+        <?php foreach ($orders as $order) {
+            $state = $order['scan_state'];
+            $invoiceStatus = is_string($state['invoice_status'] ?? null) ? $state['invoice_status'] : 'invalid';
+            $expiresAt = $state['expires_at'] ?? null;
+            $lastScanned = (int)$order['last_scanned_at'];
+            $late = $order['status'] === 'pending' && $invoiceStatus === 'review'
+                && ($state['closed_reason'] ?? '') === 'expired';
+        ?>
+            <tr>
+                <td>
+                    #<?php echo $this->Html->safe($order['id']); ?><br>
+                    <a href="<?php echo $this->Html->safe($this->base_uri . 'clients/view/' . $order['client_id'] . '/'); ?>">
+                        #<?php echo $this->Html->safe($order['client_id']); ?>
+                    </a>
+                </td>
+                <td>
+                    <?php echo $this->Html->safe($order['amount'] . ' ' . $order['currency']); ?><br>
+                    <?php echo $this->Html->safe($order['xmr_amount']); ?> XMR
+                </td>
+                <td><?php echo $this->Html->safe($order['received_xmr'] ?? $this->_('AdminMain.index.unknown', true)); ?></td>
+                <td><?php echo $this->Html->safe($order['status'] . ' / ' . $invoiceStatus); ?></td>
+                <td>
+                    <?php
+                    if (is_int($expiresAt) && $expiresAt > 0) {
+                        echo $this->Html->safe(gmdate('Y-m-d H:i:s', $expiresAt));
+                    } elseif ($expiresAt === 0) {
+                        $this->_('AdminMain.index.no_expiry');
+                    } else {
+                        $this->_('AdminMain.index.unknown');
+                    }
+                    ?>
+                </td>
+                <td><?php echo $this->Html->safe($lastScanned > 0 ? gmdate('Y-m-d H:i:s', $lastScanned) : $this->_('AdminMain.index.never', true)); ?></td>
+                <td class="text-wrap text-break">
+                    <?php if (is_array($state['late_acceptance'] ?? null)) {
+                        $acceptance = $state['late_acceptance'];
+                    ?>
+                        <p class="mb-1"><?php $this->_('AdminMain.index.accepted_by'); ?> #<?php echo $this->Html->safe((int)($acceptance['staff_id'] ?? 0)); ?></p>
+                        <?php if (is_int($acceptance['accepted_at'] ?? null)) { ?>
+                            <p class="mb-1"><?php $this->_('AdminMain.index.accepted_at'); ?>: <?php echo $this->Html->safe(gmdate('Y-m-d H:i:s', $acceptance['accepted_at'])); ?></p>
+                        <?php } ?>
+                        <p class="mb-0"><?php echo $this->Html->safe(is_string($acceptance['reason'] ?? null) ? $acceptance['reason'] : ''); ?></p>
+                    <?php } ?>
+                    <?php if ($can_accept && $late) {
+                        $this->Form->create($this->base_uri . 'plugin/xmrpay_watch/admin_main/accept/');
+                        $this->Form->fieldHidden('order_id', $order['id']);
+                        $this->Form->fieldHidden('gateway_id', $order['gateway_id']);
+                        $reasonId = 'reason_' . $order['id'];
+                        $this->Form->label($this->_('AdminMain.index.reason', true), $reasonId, ['class' => 'form-label']);
+                        $this->Form->fieldText('reason', '', ['id' => $reasonId, 'class' => 'form-control mb-2', 'required' => true, 'maxlength' => 500]);
+                        $this->Form->fieldSubmit('accept', $this->_('AdminMain.index.accept', true), ['class' => 'btn btn-sm btn-primary']);
+                        $this->Form->end();
+                    } ?>
+                </td>
+            </tr>
+        <?php } ?>
+        <?php if (!$orders) { ?>
+            <tr><td colspan="7" class="p-3 text-muted"><?php $this->_('AdminMain.index.no_results'); ?></td></tr>
+        <?php } ?>
+        </tbody>
+    </table>
+</div>
+<?php
+if (isset($this->Pagination) && $this->Pagination->hasPages()) {
+    $this->Widget->footer();
+    $this->Pagination->build();
+}
+$this->Widget->end();
+?>

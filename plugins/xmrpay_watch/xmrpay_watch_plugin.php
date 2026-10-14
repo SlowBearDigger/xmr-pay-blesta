@@ -41,6 +41,34 @@ class XmrpayWatchPlugin extends Plugin
         $this->install($plugin_id);
     }
 
+    public function getActions()
+    {
+        return [[
+            'action' => 'nav_secondary_staff',
+            'uri' => 'plugin/xmrpay_watch/admin_main/',
+            'name' => 'XmrpayWatchPlugin.payments',
+            'options' => ['parent' => 'tools/']
+        ]];
+    }
+
+    public function getPermissions()
+    {
+        return [
+            [
+                'group_alias' => 'admin_tools',
+                'name' => Language::_('XmrpayWatchPlugin.permission.view', true),
+                'alias' => 'xmrpay_watch.admin_main',
+                'action' => 'index'
+            ],
+            [
+                'group_alias' => 'admin_tools',
+                'name' => Language::_('XmrpayWatchPlugin.permission.accept', true),
+                'alias' => 'xmrpay_watch.admin_main',
+                'action' => 'accept'
+            ]
+        ];
+    }
+
     public function uninstall($plugin_id, $last_instance)
     {
         Loader::loadModels($this, ['CronTasks']);
@@ -93,10 +121,14 @@ class XmrpayWatchPlugin extends Plugin
                         break;
                     }
                     $store->markScanAttempt($order['id']);
-                    $scanner->set_time_budget(min(8, $remaining));
+                    $remaining = $deadline - microtime(true);
+                    if ($remaining <= 0) {
+                        break;
+                    }
+                    $scanner->set_time_budget($remaining);
                     $settler = new \XmrPay\Adapter\Settler($gateway, $store, [
                         'min_confirmations' => (int)($config['min_confirmations'] ?? 10),
-                        'time_budget' => min(8, $remaining), 'max_blocks' => 128
+                        'time_budget' => $remaining, 'max_blocks' => 128
                     ]);
                     $report = $settler->settleOrder($order);
                     if ($report['status'] === 'error') {

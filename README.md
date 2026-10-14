@@ -10,10 +10,17 @@ PHP engine. The companion XMRPay Watch plugin scans Monero nodes through Blesta'
 cron and records confirmed payments using native Transactions and Invoices models.
 Native mode requires no XMRPay agent, Node.js, wallet files or wallet RPC service.
 
-The licensed laboratory verified classic regtest payments through HTTP checkout,
-native accounting, invoice closure and service activation. Node-health metadata
-was simulated for that offline chain. Mainnet qualification, sustained scanner
-capacity and external provisioning modules remain pending.
+The licensed Apache/HTTPS laboratory verified classic regtest payments through
+checkout, native accounting, invoice closure, late acceptance and service activation.
+Node-health metadata was simulated only for that offline chain. A separate fresh
+0.03 XMR stagenet payment completed HTTPS checkout, native accounting, invoice
+closure and None-module activation through a real third-party HTTPS node.
+Read-only scanning of a historical mainnet RingCT transaction also passed against
+a live daemon.
+A fresh merchant payment on mainnet remains unqualified. Service activation uses
+Blesta's None module; external provisioning modules need their own integration
+checks. Queue and recovery measurements used a sparse, stationary test chain;
+they do not establish throughput on dense mainnet blocks.
 
 A primary address and private view key allow incoming-payment detection without
 spending authority. Never enter a seed or private spend key. The view key exposes
@@ -29,11 +36,23 @@ PHP 8.3.35, ionCube 15.5 and MariaDB 11.4.13. Blesta's bundled Minphp Date raise
 an installation deprecation exception under PHP 8.4; that combination is not
 qualified by these tests.
 
+The validated Blesta 6.0.3 installation includes four local fixes for invoice
+selection, payment ownership, missing invoices and HTTP error status handling.
+Those licensed-platform patches are maintained separately from this package.
+In an unmodified installation, repeated invoice selections can inflate a checkout
+quote, and the native payment page can disclose another client's invoice details
+before invoking the gateway. These two defects block qualification of the stock
+platform. Preserve the reviewed patch set and rerun its regressions when upgrading
+Blesta, or obtain vendor fixes that address the same behavior.
+
 1. Extract the built installation ZIP. GitHub's automatic source archives do not
    include the bundled engine; build them from a Git checkout as described below.
    Copy `components/gateways/nonmerchant/xmrpay` and `plugins/xmrpay_watch` into
    the matching paths in Blesta. Install or upgrade the gateway, then install
    XMRPay Watch under Settings > Company > Plugins.
+   After upgrading the plugin, grant the Monero payment permissions to the
+   appropriate staff groups under Settings > System > Staff > Staff Groups.
+   Viewing requests and accepting late payments have separate permissions.
 2. Configure XMRPay under Settings > Company > Payment Gateways with a matching
    primary address, private view key and network (Mainnet by default). Enter node
    URLs as separate lines or in the JSON format supported by the existing engine.
@@ -97,6 +116,16 @@ If another payment reduces an invoice's balance, its old checkout stops offering
 payment instructions and asks the client to start again from their invoices.
 Funds fully observed before expiry still settle; any excess becomes credit.
 
+Tools > Monero Payments lists requests, received amounts, expiry and the last scan.
+Filter by Pending or Needs review to investigate unpaid requests. An authorized
+staff member may accept a fully funded late payment at its original quote by
+entering a review reason. Acceptance checks node health and refreshes the complete
+scan before recording confirmed outputs. Underpayments, insufficient confirmations,
+changed wallets, cancelled invoices and outputs already claimed elsewhere remain
+blocked. The page retains the accepting staff member, UTC time and reason.
+Use this action to reconcile a late XMRPay request; Blesta's separate Record Payment
+form does not reserve its Monero outputs or close its payment request.
+
 Blesta stores currency amounts at four decimal places; XMR detection uses exact
 atomic amounts. Confirmed excess funds become proportional native account credit,
 rounded down to Blesta's four-decimal precision. Output reservations, transaction
@@ -105,6 +134,12 @@ Unique output constraints prevent the same output paying two requests; retries
 of a committed request do not create another transaction.
 
 Scanning uses bounded, resumable batches and per-gateway database advisory locks.
+Each scheduled run handles up to 25 requests with a shared 20-second scanner
+budget. Database waits and accounting can extend the total runtime. With 100
+pending requests, a complete rotation takes at least four minutely runs; dense
+blocks or slow nodes can make it longer. Measure backlog on the target installation
+and keep scan delays below the quote expiry. Expired requests continue to be watched
+because they can still receive funds.
 An unsuccessful attempt does not prevent later pending requests receiving work.
 Node timeouts, corrupt evidence, ownership errors or failed accounting checks
 leave the request pending. Monitor the Blesta cron logs and investigate repeated
@@ -135,8 +170,8 @@ package download is required at runtime.
 Build from a Git checkout with Bash, Git, GNU coreutils, tar and zip. Use clean
 local checkouts of these exact revisions; the bundler verifies both before copying:
 
-- [xmr-pay-php](https://github.com/SlowBearDigger/xmr-pay-php) at `1eb8e34d0cf5049698f6591427356f53eae79c88`.
-- [xmr-pay-adapter-core](https://github.com/SlowBearDigger/xmr-pay-adapter-core) at `14cff31b99206d544db4b337f2fce356c631bfcf`.
+- [xmr-pay-php](https://github.com/SlowBearDigger/xmr-pay-php) at `594cdeaf4803c35f202bd3a677c5d8b1279a9f60`.
+- [xmr-pay-adapter-core](https://github.com/SlowBearDigger/xmr-pay-adapter-core) at `90699b3123338ff39093d942ec0cd1a17f6447ad`.
 
 ```bash
 bash tools/bundle-engine.sh /path/to/xmr-pay-php /path/to/xmr-pay-adapter-core

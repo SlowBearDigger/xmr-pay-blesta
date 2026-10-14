@@ -1,0 +1,24 @@
+<?php
+$lang['AdminMain.index.page_title'] = 'Monero Payments';
+$lang['AdminMain.index.description'] = 'Review payment requests and the latest scan results. Late payments require a complete scan and sufficient confirmed Monero. Accepting a late payment credits the original quote and records your reason.';
+$lang['AdminMain.index.all'] = 'All';
+$lang['AdminMain.index.pending'] = 'Pending';
+$lang['AdminMain.index.review'] = 'Needs review';
+$lang['AdminMain.index.order'] = 'Payment / client';
+$lang['AdminMain.index.quote'] = 'Original quote';
+$lang['AdminMain.index.received'] = 'Received XMR';
+$lang['AdminMain.index.status'] = 'Status';
+$lang['AdminMain.index.expiry'] = 'Quote expiry (UTC)';
+$lang['AdminMain.index.scanned'] = 'Last scan attempt (UTC)';
+$lang['AdminMain.index.action'] = 'Late payment';
+$lang['AdminMain.index.reason'] = 'Reason for accepting the original quote';
+$lang['AdminMain.index.accept'] = 'Verify and accept';
+$lang['AdminMain.index.accepted_by'] = 'Accepted by staff';
+$lang['AdminMain.index.accepted_at'] = 'Accepted at (UTC)';
+$lang['AdminMain.index.no_results'] = 'No payment requests match this filter.';
+$lang['AdminMain.index.unknown'] = 'Unavailable';
+$lang['AdminMain.index.never'] = 'Not yet scanned';
+$lang['AdminMain.index.no_expiry'] = 'No expiry';
+$lang['AdminMain.!error.access'] = 'Access is unavailable. Check that XMRPay Watch is upgraded and your staff group has the required permission.';
+$lang['AdminMain.!error.accept'] = 'The payment could not be accepted. Confirm the payment request, reason, original wallet, invoice eligibility and node availability. Allow the scan to finish, then review the request again.';
+$lang['AdminMain.!success.accepted'] = 'The late payment was verified and recorded at its original quote.';

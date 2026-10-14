@@ -9,8 +9,8 @@ fi
 repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 engine_root="$(cd -- "$1" && pwd)"
 core_root="$(cd -- "$2" && pwd)"
-engine_revision=1eb8e34d0cf5049698f6591427356f53eae79c88
-core_revision=14cff31b99206d544db4b337f2fce356c631bfcf
+engine_revision=594cdeaf4803c35f202bd3a677c5d8b1279a9f60
+core_revision=90699b3123338ff39093d942ec0cd1a17f6447ad
 vendor_root="$repo_root/components/gateways/nonmerchant/xmrpay/vendor"
 destination="$vendor_root/xmrpay"
 
