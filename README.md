@@ -48,7 +48,7 @@ configuration in gateway metadata; protect its encryption key and backups.
    Under **Settings > Company > Plugins**, install **XMRPay Watch**. For an
    existing installation, copy the matching files and use Blesta's **Upgrade**
    action for both components. Copying files alone does not register Watch's
-   checkout validation or migrate its scan queue.
+   checkout validation or migrate its scan and receipt queues.
 3. Open the gateway's settings and enter the wallet, network and nodes. Enable
    USD, EUR or XMR as accepted currencies. Add XMR to Blesta's currencies first
    if needed. USD and EUR quotes use CoinGecko; XMR invoices need no price feed.
@@ -59,8 +59,9 @@ configuration in gateway metadata; protect its encryption key and backups.
    Monero payment permissions. Viewing requests and accepting late payments
    have separate permissions.
 6. Complete a test invoice, then check its payment transaction, remaining balance
-   and service status. Service activation follows Blesta's automation and the
-   selected module; it may run after the payment scan.
+   and service status. Configure Blesta's mail delivery and check the payment
+   receipt too. Service activation follows Blesta's automation and the selected
+   module; it may run after the payment scan.
 
 Watch must remain installed, upgraded and enabled. Its checkout validation runs
 before gateway selection and preserves authenticated payments, signed guest
@@ -142,6 +143,9 @@ session asks the customer to return to their invoice. Without JavaScript, the
 address, amount, QR and wallet link remain usable; the customer checks the invoice
 for its status.
 
+If a new quote cannot be created, checkout shows an error with a retry link.
+Existing active quotes keep their original rate when the price feed is unavailable.
+
 The checkout includes a **By SlowBearDigger** link to `https://xmrpay.shop`.
 Turn off **Show author credit** in the gateway settings to hide it.
 
@@ -187,6 +191,23 @@ If another payment reduces an invoice balance, the old checkout stops offering
 instructions and asks the client to start from their invoices again. Funds fully
 observed before expiry still settle; excess becomes credit.
 
+## Payment receipts
+
+Blesta provides the email template, contact preferences and mail transport.
+Configure **Settings > Company > Emails > Mail Settings** and enable the
+**Payment Received (Non-Merchant)** template. Receipts use the recorded payment's
+amount and currency and go to billing contacts, or the primary contact when
+there are no billing contacts. Blesta records delivery attempts in its email log.
+
+XMRPay saves the receipt request in the same transaction as the payment, then
+sends it after that transaction commits. A mail failure leaves the payment paid;
+Watch retries delivery on later cron runs, including when nodes are unavailable.
+Ordinary retries skip recipients already sent the receipt. An upgrade does not
+send receipts for historical payments, and an inactive template suppresses them.
+
+A process crash after SMTP accepts a message but before delivery progress is
+saved can repeat that email. It does not repeat the payment or invoice credit.
+
 ## Operation and tested scope
 
 Watch scans up to 25 requests per scheduled run, sharing a 20-second scan budget.
@@ -194,29 +215,42 @@ Database waits and accounting can extend total runtime. Progress is persisted
 between runs, and requests rotate so later entries receive scan time. Expired
 requests remain watched because they may still receive funds.
 
+Receipt delivery follows scanning, with a separate five-second budget and up to
+ten due receipts per gateway. Failed or incomplete attempts wait at least one
+minute before retrying. SMTP calls can extend that budget.
+
+Completed scans resume after their verified checkpoint. The scanner checks that
+checkpoint before and after reading new blocks, avoiding repeated work while
+still detecting a changed chain. Each request processes new transactions
+separately, including expired requests kept for late-payment review.
+
 Monitor the pending queue, last-scan times and cron logs. Keep scan delays below
-quote validity. A nine-request test against one local block containing 128 real
-RingCT transactions needed eight cron turns, with 160 seconds of active scanning.
-The limit of 25 requests is not a throughput guarantee. Continuously growing
-dense blocks and a long-running accumulation of unpaid requests still need
-capacity qualification for the intended deployment.
+quote validity. The limit of 25 requests is not a throughput guarantee: measure
+the expected unpaid queue and block load on the intended deployment. This
+version has no automatic retirement of abandoned requests.
 
-The tested flows include stock HTTPS checkout, signed guest payment links,
-malformed-input rejection, native settings save and upgrades, a real stagenet
-payment, invoice closure, None-module activation, retry/concurrency checks,
-late-payment review and dense-block recovery. Local offline tests simulate node
-health metadata; their blocks and transactions are real. Browser checks cover
-Chromium at desktop and mobile widths, QR decoding, copying and JavaScript-off
-behavior. These are integration results, not a claim that every deployment is
-qualified.
+The tested flows include stock HTTPS checkout, interactive USD/EUR orders with
+live CoinGecko quotes, signed guest payment links, malformed-input rejection,
+native settings and upgrades, a real stagenet payment, invoice closure and
+None-module activation. Payment receipts reached a local SMTP mailbox with the
+correct currency and reference. A mail outage and concurrent retries preserved
+one payment and one receipt per recipient. Local offline tests simulate node
+health metadata; their blocks and transactions are real.
 
-Remaining coverage includes the complete interactive order-cart flow, live
-USD/EUR settlement through the price feed, external provisioning modules, mail
-delivery, multiple companies, a separate MySQL server, other browsers and
-physical wallet-app handoff. Earlier late-acceptance and database-restart tests
-used a patched platform laboratory; repeat those cases on the final stock
-installation before extending their qualification. Provisioning was verified
-with Blesta's None module. Fresh payment tests use stagenet and an offline chain.
+Browser checks cover Chromium at desktop and mobile widths, QR decoding, copying,
+automatic payment updates and JavaScript-off behavior. A price-feed outage shows
+a usable error and retry link while preserving existing quotes.
+
+Stock database tests interrupted payment accounting before and after commit,
+then restored a backup and retried. Payment, output claims and receipt intent
+remained atomic, and recovery preserved one credit per payment. Authorized late
+acceptance, underpayment rejection and native staff permissions were also tested.
+
+External provisioning modules, external mail delivery, multiple companies, a
+separate MySQL server, other browsers and physical wallet-app handoff remain
+unqualified. Provisioning was verified with Blesta's None module. Fresh payment
+tests use stagenet and an offline chain. These results apply to the tested
+environment and flows.
 
 ## Upgrading an agent installation
 
@@ -235,7 +269,7 @@ manifest. No Composer install or package download is needed at runtime.
 Use Bash, Git, GNU coreutils, tar and zip, with clean local checkouts at:
 
 - [xmr-pay-php](https://github.com/SlowBearDigger/xmr-pay-php): `d62364c34ffef5e3318304eb726262f4f9be11de`.
-- [xmr-pay-adapter-core](https://github.com/SlowBearDigger/xmr-pay-adapter-core): `90699b3123338ff39093d942ec0cd1a17f6447ad`.
+- [xmr-pay-adapter-core](https://github.com/SlowBearDigger/xmr-pay-adapter-core): `4bc2351c876fbd3a8fe43289a81ba5d865b65922`.
 
 ```bash
 bash tools/bundle-engine.sh /path/to/xmr-pay-php /path/to/xmr-pay-adapter-core

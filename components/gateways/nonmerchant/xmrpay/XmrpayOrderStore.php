@@ -69,18 +69,26 @@ class XmrpayOrderStore implements OutputOrderStore
             status VARCHAR(16) CHARACTER SET ascii NOT NULL DEFAULT 'pending',
             state LONGTEXT NOT NULL,
             transaction_id INT UNSIGNED DEFAULT NULL,
+            receipt_due_at BIGINT UNSIGNED DEFAULT NULL,
             created_at BIGINT UNSIGNED NOT NULL,
             last_scanned_at BIGINT UNSIGNED NOT NULL DEFAULT 0,
             scan_priority BIGINT UNSIGNED NOT NULL DEFAULT 0,
             PRIMARY KEY (id),
             UNIQUE KEY active_quote (active_key),
-            KEY pending_scan (gateway_id, status, scan_priority, last_scanned_at, id)
+            KEY pending_scan (gateway_id, status, scan_priority, last_scanned_at, id),
+            KEY receipt_delivery (gateway_id, receipt_due_at, id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
         if (!$record->query("SHOW COLUMNS FROM gateway_xmrpay_orders LIKE 'scan_priority'")->fetch()) {
             $record->query('ALTER TABLE gateway_xmrpay_orders
                 ADD COLUMN scan_priority BIGINT UNSIGNED NOT NULL DEFAULT 0,
                 DROP INDEX pending_scan,
                 ADD INDEX pending_scan (gateway_id, status, scan_priority, last_scanned_at, id)');
+        }
+        if (!$record->query("SHOW COLUMNS FROM gateway_xmrpay_orders LIKE 'receipt_due_at'")->fetch()) {
+            $record->query('ALTER TABLE gateway_xmrpay_orders ADD COLUMN receipt_due_at BIGINT UNSIGNED DEFAULT NULL');
+        }
+        if (!$record->query("SHOW INDEX FROM gateway_xmrpay_orders WHERE Key_name = 'receipt_delivery'")->fetch()) {
+            $record->query('ALTER TABLE gateway_xmrpay_orders ADD INDEX receipt_delivery (gateway_id, receipt_due_at, id)');
         }
         $record->query("CREATE TABLE IF NOT EXISTS gateway_xmrpay_outputs (
             network VARCHAR(8) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
@@ -389,7 +397,9 @@ class XmrpayOrderStore implements OutputOrderStore
                 $state['late_acceptance'] = $approval;
             }
             $this->Record->query("UPDATE gateway_xmrpay_orders SET status = 'paid', active_key = NULL,
-                state = ?, transaction_id = ? WHERE id = ?", [json_encode($state, JSON_THROW_ON_ERROR), $transactionId, $orderId]);
+                state = ?, transaction_id = ?, receipt_due_at = ? WHERE id = ?", [
+                json_encode($state, JSON_THROW_ON_ERROR), $transactionId, time(), $orderId
+            ]);
             $this->assertAccounting((int)$transactionId, $order, $creditedAmount, $reference);
             $this->assertApplications((int)$transactionId, $amounts);
             $this->connection->commit();

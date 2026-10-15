@@ -1,0 +1,8 @@
+<div class="alert alert-danger xmrpay-error" role="alert">
+    <p><?php echo $this->Html->safe($message); ?></p>
+    <?php if ($retry) { ?>
+    <a class="btn btn-light" href="">Try again</a>
+    <?php } else { ?>
+    <a class="btn btn-light" href="<?php echo $this->Html->safe($invoices_url); ?>">Return to invoices</a>
+    <?php } ?>
+</div>

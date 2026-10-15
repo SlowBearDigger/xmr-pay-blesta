@@ -182,13 +182,23 @@ class Xmrpay extends NonmerchantGateway
             }
             return $this->renderProcess($order['address'], $xmr);
         } catch (XmrpayInvoiceBalanceChanged $error) {
-            $this->Input->setErrors(['xmrpay' => ['checkout' => 'The invoice balance has changed. Return to your invoices and start a new payment.']]);
-            return null;
+            return $this->renderError('The invoice balance has changed. Return to your invoices and start a new payment.', false);
         } catch (Throwable $e) {
             error_log('XMRPay checkout failed: ' . get_class($e));
-            $this->Input->setErrors(['xmrpay' => ['checkout' => 'Could not create a Monero payment. Please try again.']]);
-            return null;
+            return $this->renderError('Could not create a Monero payment. Please try again.', true);
         }
+    }
+
+    private function renderError(string $message, bool $retry): string
+    {
+        $this->Input->setErrors(['xmrpay' => ['checkout' => $message]]);
+        $this->view = new View('error', 'default');
+        $this->view->setDefaultView('components' . DS . 'gateways' . DS . 'nonmerchant' . DS . 'xmrpay' . DS);
+        Loader::loadHelpers($this, ['Html']);
+        $this->view->set('message', $message);
+        $this->view->set('retry', $retry);
+        $this->view->set('invoices_url', WEBDIR . Configure::get('Route.client') . '/invoices/');
+        return $this->view->fetch();
     }
 
     private function nativeProcess(int $clientId, string $amount, string $currency, array $allocations): string

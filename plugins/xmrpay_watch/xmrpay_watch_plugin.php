@@ -236,9 +236,11 @@ class XmrpayWatchPlugin extends Plugin
             return;
         }
         require_once COMPONENTDIR . 'gateways' . DS . 'nonmerchant' . DS . 'xmrpay' . DS . 'XmrpayOrderStore.php';
+        require_once COMPONENTDIR . 'gateways' . DS . 'nonmerchant' . DS . 'xmrpay' . DS . 'XmrpayReceipts.php';
         Loader::loadModels($this, ['GatewayManager']);
         $deadline = microtime(true) + 20;
-        foreach ($this->GatewayManager->getByClass('xmrpay', Configure::get('Blesta.company_id')) as $installed) {
+        $gateways = $this->GatewayManager->getByClass('xmrpay', Configure::get('Blesta.company_id'));
+        foreach ($gateways as $installed) {
             $config = [];
             foreach ($installed->meta as $field) {
                 $config[$field->key] = $field->value;
@@ -290,6 +292,17 @@ class XmrpayWatchPlugin extends Plugin
                 error_log('XMRPay Watch failed: ' . get_class($error));
             } finally {
                 $this->Record->query('SELECT RELEASE_LOCK(?)', [$lock]);
+            }
+        }
+        $receiptDeadline = microtime(true) + 5;
+        foreach ($gateways as $installed) {
+            if (microtime(true) >= $receiptDeadline) {
+                break;
+            }
+            try {
+                (new XmrpayReceipts((int)$installed->id))->sendPending($receiptDeadline);
+            } catch (Throwable $error) {
+                error_log('XMRPay receipt delivery failed: ' . get_class($error));
             }
         }
     }

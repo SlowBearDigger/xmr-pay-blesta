@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.5] - Unreleased
+
+- Send native Blesta payment receipts after accounting commits, using its template, billing contacts and mail settings.
+- Persist receipt intent with payment accounting and retry failed delivery independently of node availability.
+- Preserve recipient progress across retries, serialize concurrent delivery and leave historical payments unscheduled during upgrades.
+- Show a usable checkout error and retry link when a new quote cannot be created; return clients to their invoices when the balance changes.
+- Resume completed scans after their verified checkpoint, preserving chain validation while avoiding repeated historical reads.
+
 ## [1.1.4] - Unreleased
 
 - Update checkout automatically from its saved payment state without triggering node scans from the browser.
