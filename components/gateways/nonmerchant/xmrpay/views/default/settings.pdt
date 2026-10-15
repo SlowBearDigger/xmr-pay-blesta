@@ -58,6 +58,11 @@ foreach ($paymentSettings as $field => [$label, $default]) { ?>
 </div>
 <p class="form-text">Use a dedicated wallet or a subaddress index range reserved for this installation. Full payment must be detected before the quote expires; confirmations may arrive later. Late payments require staff review under Tools &gt; Monero Payments.</p>
 </fieldset>
+<div class="form-check mb-3">
+    <?php $this->Form->fieldHidden('show_credit', '0'); ?>
+    <?php $this->Form->fieldCheckbox('show_credit', '1', ($meta['show_credit'] ?? '1') !== '0', ['id' => 'show_credit', 'class' => 'form-check-input']); ?>
+    <?php $this->Form->label('Show author credit', 'show_credit', ['class' => 'form-check-label']); ?>
+</div>
 <p>Install XMRPay Watch and run the Blesta cron every minute.</p>
 <details>
 <summary>Existing agent payments</summary>

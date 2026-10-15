@@ -17,7 +17,7 @@ bundle_path=components/gateways/nonmerchant/xmrpay/vendor/xmrpay
 staging_root="$(mktemp -d)"
 trap 'rm -rf -- "$staging_root"' EXIT
 cd "$repo_root"
-git ls-files -z -- components plugins README.md CHANGELOG.md LICENSE |
+git ls-files -z -- components plugins docs/screenshots README.md CHANGELOG.md LICENSE |
     tar --null -T - -cf - | tar -xf - -C "$staging_root"
 mkdir -p "$staging_root/$bundle_path"
 (
@@ -28,4 +28,4 @@ mkdir -p "$staging_root/$bundle_path"
     } | tar --verbatim-files-from -T - -cf -
 ) | tar -xf - -C "$staging_root/$bundle_path"
 cd "$staging_root"
-zip -q -r "$output" components plugins README.md CHANGELOG.md LICENSE
+zip -q -r "$output" components plugins docs README.md CHANGELOG.md LICENSE

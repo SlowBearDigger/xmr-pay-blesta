@@ -1,4 +1,5 @@
 <style>
+div.float-right.mt-2:has(> .xmrpay-pay) { width: 480px; max-width: 100%; }
 .xmrpay-pay {
     --xmr: #ff6600;
     --ink: #1a1a1a;
@@ -14,6 +15,7 @@
     line-height: 1.45;
 }
 .xmrpay-pay * { box-sizing: border-box; }
+.xmrpay-pay [hidden] { display: none; }
 .xmrpay-pay__bar {
     display: flex;
     align-items: center;
@@ -22,18 +24,7 @@
     padding: 14px 20px;
     border-bottom: 1px solid var(--line);
 }
-.xmrpay-pay__brand { font-weight: 700; font-size: 15px; }
-.xmrpay-pay__mono {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 26px;
-    height: 26px;
-    margin-right: 6px;
-    border-radius: 7px;
-    background: var(--xmr);
-    color: var(--ink);
-}
+.xmrpay-pay__brand { font-weight: 700; font-size: 18px; color: #b84700; }
 .xmrpay-pay__net { font-size: 12px; color: var(--muted); text-transform: uppercase; }
 .xmrpay-pay__body { padding: 24px 20px; text-align: center; }
 .xmrpay-pay__title { margin: 0 0 8px; font-size: 20px; font-weight: 700; }
@@ -82,8 +73,9 @@
     text-decoration: none;
 }
 .xmrpay-pay__open:hover { background: #963a00; color: #fff; }
-.xmrpay-pay__copy:focus-visible, .xmrpay-pay__open:focus-visible { outline: 2px solid var(--xmr); outline-offset: 2px; }
+.xmrpay-pay__copy:focus-visible, .xmrpay-pay__open:focus-visible, .xmrpay-pay__foot a:focus-visible { outline: 2px solid var(--xmr); outline-offset: 2px; }
 .xmrpay-pay__notice {
+    margin-top: 16px;
     background: #fff7ed;
     border: 1px solid #fed7aa;
     color: #9a3412;
@@ -92,39 +84,63 @@
     font-size: 13px;
     text-align: left;
 }
+.xmrpay-pay__status { margin: 20px 0; padding: 16px; background: #f9fafb; border-radius: 10px; }
+.xmrpay-pay__status h4 { margin: 0 0 8px; font-size: 17px; font-weight: 600; }
+.xmrpay-pay__status p { margin: 0; font-size: 13px; }
+.xmrpay-pay__status[data-status="detected"] { color: #9a3412; background: #fff7ed; }
+.xmrpay-pay__status[data-status="paid"] { color: #166534; background: #f0fdf4; }
+.xmrpay-pay__status[data-status="paid"] h4 { margin: 0; }
+.xmrpay-pay__foot { padding: 13px 20px; border-top: 1px solid var(--line); text-align: center; font-size: 12px; }
+.xmrpay-pay__foot a { color: var(--muted); text-decoration: none; }
+.xmrpay-pay__foot a:hover { color: #b84700; }
 @media (max-width: 480px) {
     .xmrpay-pay__addr { flex-direction: column; }
 }
 </style>
 <div class="xmrpay-pay" id="xmrpay-pay">
     <div class="xmrpay-pay__bar">
-        <span class="xmrpay-pay__brand"><span class="xmrpay-pay__mono" aria-hidden="true">ɱ</span> xmr-pay</span>
+        <span class="xmrpay-pay__brand">xmr-pay</span>
         <span class="xmrpay-pay__net"><?php echo $this->Html->safe($network); ?></span>
     </div>
     <div class="xmrpay-pay__body">
-        <h3 class="xmrpay-pay__title">Pay with Monero</h3>
-        <p class="xmrpay-pay__sub">Scan the code or copy the address into your wallet. Send exactly:</p>
+        <h3 class="xmrpay-pay__title">Monero payment</h3>
         <div class="xmrpay-pay__amount"><?php echo $this->Html->safe($xmr_amount); ?> <span>XMR</span></div>
+        <?php if (!empty($status_url)) { ?>
+        <div class="xmrpay-pay__status" id="xmrpay-status" role="status" data-poll="<?php echo $this->Html->safe($status_url); ?>">
+            <h4 id="xmrpay-status-title">Waiting for payment</h4>
+            <p id="xmrpay-status-detail">Updates automatically.</p>
+        </div>
+        <?php } ?>
+        <div id="xmrpay-payment-instructions">
+        <p class="xmrpay-pay__sub xmrpay-send">Scan the QR or copy the address. Send the exact amount shown.</p>
         <?php
         $qrOptions = new \chillerlan\QRCode\QROptions(['outputType' => \chillerlan\QRCode\QRCode::OUTPUT_MARKUP_SVG]);
         $qrImage = (new \chillerlan\QRCode\QRCode($qrOptions))->render($payment_uri);
         ?>
-        <img class="xmrpay-pay__qr" src="<?php echo $this->Html->safe($qrImage); ?>" alt="Monero payment QR code" />
-        <p class="xmrpay-pay__label" id="xmrpay-addr-label">Send to this address</p>
+        <img class="xmrpay-pay__qr xmrpay-send" src="<?php echo $this->Html->safe($qrImage); ?>" alt="Monero payment QR code" />
+        <p class="xmrpay-pay__label" id="xmrpay-addr-label">Payment address</p>
         <div class="xmrpay-pay__addr">
             <code id="xmrpay-addr" aria-labelledby="xmrpay-addr-label"><?php echo $this->Html->safe($address); ?></code>
             <button type="button" class="xmrpay-pay__copy" id="xmrpay-copy" aria-label="Copy the Monero address" hidden>Copy</button>
         </div>
         <p class="xmrpay-pay__sub" id="xmrpay-copy-status" role="status"></p>
-        <a class="xmrpay-pay__open" href="<?php echo $this->Html->safe($payment_uri); ?>">Open Monero wallet</a>
+        <a class="xmrpay-pay__open xmrpay-send" href="<?php echo $this->Html->safe($payment_uri); ?>">Open Monero wallet</a>
+        </div>
         <?php if ($expires_at !== null) { ?>
-        <div class="xmrpay-pay__notice">
-            <p>The full payment must be detected before <time datetime="<?php echo gmdate('c', $expires_at); ?>"><?php echo gmdate('Y-m-d H:i:s', $expires_at); ?> UTC</time>. Confirmations may arrive later.</p>
-            <p>Payments first detected or completed after this deadline require manual review. If you have already paid, contact support before paying again.</p>
+        <div class="xmrpay-pay__notice" id="xmrpay-deadline">
+            <p>Full payment must be detected by <time datetime="<?php echo gmdate('c', $expires_at); ?>"><?php echo gmdate('Y-m-d H:i:s', $expires_at); ?> UTC</time>. Confirmations can arrive later. Late payments need manual review.</p>
         </div>
         <?php } ?>
-        <p class="xmrpay-pay__sub">Refresh your invoice to check the payment status.</p>
+        <noscript><p class="xmrpay-pay__sub">Check your invoice for payment updates.</p></noscript>
+        <?php if (empty($status_url)) { ?>
+        <p class="xmrpay-pay__sub">Check your invoice for payment updates.</p>
+        <?php } ?>
     </div>
+    <?php if (!empty($show_credit)) { ?>
+    <div class="xmrpay-pay__foot">
+        <a href="https://xmrpay.shop" target="_blank" rel="noopener noreferrer">By SlowBearDigger</a>
+    </div>
+    <?php } ?>
 </div>
 <script>
 (function () {
@@ -169,3 +185,94 @@
     });
 })();
 </script>
+<?php if (!empty($status_url)) { ?>
+<script>
+(function () {
+    var host = document.getElementById('xmrpay-status');
+    var title = document.getElementById('xmrpay-status-title');
+    var detail = document.getElementById('xmrpay-status-detail');
+    var instructions = document.getElementById('xmrpay-payment-instructions');
+    var deadline = document.getElementById('xmrpay-deadline');
+    var timer;
+    var busy = false;
+    var stopped = false;
+    var started = Date.now();
+
+    if (!window.fetch || !window.AbortController) {
+        detail.textContent = 'Check your invoice for payment updates.';
+        return;
+    }
+
+    function schedule(delay) {
+        clearTimeout(timer);
+        if (!stopped) timer = setTimeout(poll, delay);
+    }
+
+    function paint(state) {
+        var messages = {
+            waiting: ['Waiting for payment', 'Updates automatically.'],
+            detected: ['Payment detected', 'Checking amount and confirmations. Do not pay again.'],
+            review: ['Payment needs review', 'Contact support before paying.'],
+            paid: ['Paid', '']
+        };
+        if (!Object.prototype.hasOwnProperty.call(messages, state)) {
+            throw new Error('Invalid payment status.');
+        }
+        host.setAttribute('data-status', state);
+        title.textContent = messages[state][0];
+        detail.textContent = messages[state][1];
+        detail.hidden = !messages[state][1];
+        instructions.hidden = state === 'paid' || state === 'review';
+        document.querySelectorAll('.xmrpay-send').forEach(function (element) {
+            element.hidden = state !== 'waiting';
+        });
+        if (deadline) deadline.hidden = state === 'paid';
+        stopped = state === 'paid';
+    }
+
+    async function poll() {
+        if (stopped || busy) return;
+        if (document.hidden) {
+            schedule(15000);
+            return;
+        }
+        busy = true;
+        var controller = new AbortController();
+        var timeout = setTimeout(function () { controller.abort(); }, 10000);
+        try {
+            var response = await fetch(host.getAttribute('data-poll'), {
+                credentials: 'same-origin', cache: 'no-store', mode: 'same-origin',
+                redirect: 'error', headers: { 'Accept': 'application/json' }, signal: controller.signal
+            });
+            if (response.status === 403 || response.status === 404) {
+                stopped = true;
+                throw new Error('Payment session unavailable.');
+            }
+            if (!response.ok) throw new Error('Payment status unavailable.');
+            var result = await response.json();
+            paint(result.status);
+        } catch (error) {
+            title.textContent = 'Status unavailable';
+            detail.textContent = stopped
+                ? 'Return to your invoice. Do not pay again.'
+                : 'Reconnecting. Do not pay again.';
+            host.removeAttribute('data-status');
+            instructions.hidden = true;
+        } finally {
+            clearTimeout(timeout);
+            busy = false;
+            var elapsed = Date.now() - started;
+            var interval = elapsed > 300000 ? 30000 : 6000;
+            if (elapsed > 60000 && elapsed <= 300000) interval = 15000;
+            schedule(interval);
+        }
+    }
+
+    document.addEventListener('visibilitychange', function () {
+        if (!document.hidden && !stopped) schedule(400);
+    });
+    instructions.hidden = true;
+    poll();
+})();
+</script>
+<?php } ?>

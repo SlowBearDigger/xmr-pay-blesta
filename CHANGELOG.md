@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.1.4] - Unreleased
+
+- Update checkout automatically from its saved payment state without triggering node scans from the browser.
+- Authorize status reads for the exact checkout session, including signed guest links and multiple tabs.
+- Keep detected payments visible during incomplete rescans, and stop offering expired quotes while cron is delayed.
+- Show paid only after Blesta records the payment, hide sending controls and stop polling on completion.
+- Reuse the xmr-pay wordmark and supply the missing gateway logo.
+- Shorten checkout messages and add an optional author link controlled by gateway settings.
+- Keep the checkout width stable when payment instructions disappear, including inside Blesta's floated gateway container.
+- Replace the agent prototype instructions with native setup, operating limits and desktop payment screenshots.
+
 ## [1.1.3] - Unreleased
 
 - Reuse the XMRPay payment card with the exact amount, network, address and late-payment guidance.

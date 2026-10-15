@@ -60,6 +60,7 @@ class Xmrpay extends NonmerchantGateway
 
     public function editSettings(array $meta)
     {
+        $meta['show_credit'] = ($meta['show_credit'] ?? '1') === '0' ? '0' : '1';
         if (!empty($meta['address']) || !empty($meta['view_key']) || !empty($meta['nodes'])) {
             return $this->nativeSettings($meta);
         }
@@ -89,7 +90,8 @@ class Xmrpay extends NonmerchantGateway
             'agent_url' => $url,
             'agent_token' => (string)($meta['agent_token'] ?? ''),
             'webhook_secret' => (string)($meta['webhook_secret'] ?? ''),
-            'network' => (string)($meta['network'] ?? '')
+            'network' => (string)($meta['network'] ?? ''),
+            'show_credit' => $meta['show_credit']
         ];
     }
 
@@ -101,6 +103,7 @@ class Xmrpay extends NonmerchantGateway
             'view_key' => strtolower(trim((string)($meta['view_key'] ?? ''))),
             'nodes' => trim((string)($meta['nodes'] ?? '')),
             'network' => (string)($meta['network'] ?? ''),
+            'show_credit' => $meta['show_credit'],
         ];
         try {
             foreach ([
@@ -214,10 +217,22 @@ class Xmrpay extends NonmerchantGateway
         $store = new XmrpayOrderStore((int)$this->gateway_id, $config);
         $order = $store->checkout($clientId, $amount, $currency, $allocations,
             fn(): string => $this->quote($amount, $currency), $birthday);
-        return $this->renderProcess($order['address'], $order['xmr_amount'], $order['expires_at']);
+        Loader::loadComponents($this, ['Session']);
+        $grants = $this->Session->read('xmrpay_checkout');
+        $grants = is_array($grants) ? $grants : [];
+        unset($grants[$order['id']]);
+        $grants[$order['id']] = [
+            'company_id' => $order['company_id'],
+            'client_id' => $order['client_id'],
+            'gateway_id' => $order['gateway_id']
+        ];
+        $this->Session->write('xmrpay_checkout', array_slice($grants, -20, null, true));
+        $statusUrl = WEBDIR . Configure::get('Route.client')
+            . '/plugin/xmrpay_watch/client_main/status/' . $order['id'] . '/';
+        return $this->renderProcess($order['address'], $order['xmr_amount'], $order['expires_at'], $statusUrl);
     }
 
-    private function renderProcess(string $address, string $xmr, ?int $expiresAt = null): string
+    private function renderProcess(string $address, string $xmr, ?int $expiresAt = null, ?string $statusUrl = null): string
     {
         $this->view = new View('process', 'default');
         $this->view->setDefaultView('components' . DS . 'gateways' . DS . 'nonmerchant' . DS . 'xmrpay' . DS);
@@ -226,6 +241,8 @@ class Xmrpay extends NonmerchantGateway
         $this->view->set('xmr_amount', $xmr);
         $this->view->set('network', $this->meta['network']);
         $this->view->set('expires_at', $expiresAt);
+        $this->view->set('status_url', $statusUrl);
+        $this->view->set('show_credit', ($this->meta['show_credit'] ?? '1') !== '0');
         $this->view->set('payment_uri', 'monero:' . $address . '?tx_amount=' . rawurlencode($xmr));
         return $this->view->fetch();
     }
