@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.1.7] - Unreleased
+
+- Share block reads and output detection across pending requests from the same wallet with compatible scan progress.
+- Preserve individual checkpoints, partial scans, late-payment policy and native accounting while rotating attempted batches fairly.
+- Keep existing single-request scans and persisted progress compatible, without a database migration or new dependency.
+
 ## [1.1.6] - Unreleased
 
 - Let administrators configure how long empty requests remain watched after expiry, from 1 to 8760 hours with a 24-hour default.

@@ -271,27 +271,23 @@ class XmrpayWatchPlugin extends Plugin
                     continue;
                 }
                 $store = new XmrpayOrderStore((int)$installed->id, $config);
-                $firstInBatch = true;
-                foreach ($store->loadPending() as $order) {
-                    $remaining = $deadline - microtime(true);
-                    if ($remaining <= 0) {
-                        break;
+                $orders = iterator_to_array($store->loadPending(), false);
+                $remaining = $deadline - microtime(true);
+                if ($remaining <= 0) {
+                    break;
+                }
+                $scanner->set_time_budget($remaining);
+                $settler = new \XmrPay\Adapter\Settler($gateway, $store, [
+                    'min_confirmations' => (int)($config['min_confirmations'] ?? 10),
+                    'time_budget' => $remaining, 'max_blocks' => 128
+                ]);
+                $report = $settler->settleBatch($orders, function (array $group) use ($store): void {
+                    foreach ($group as $order) {
+                        $store->markScanAttempt($order['id']);
                     }
-                    $store->markScanAttempt($order['id'], $firstInBatch);
-                    $firstInBatch = false;
-                    $remaining = $deadline - microtime(true);
-                    if ($remaining <= 0) {
-                        break;
-                    }
-                    $scanner->set_time_budget($remaining);
-                    $settler = new \XmrPay\Adapter\Settler($gateway, $store, [
-                        'min_confirmations' => (int)($config['min_confirmations'] ?? 10),
-                        'time_budget' => $remaining, 'max_blocks' => 128
-                    ]);
-                    $report = $settler->settleOrder($order);
-                    if ($report['status'] === 'error') {
-                        error_log('XMRPay Watch could not persist a payment scan.');
-                    }
+                });
+                if ($report['status'] === 'error') {
+                    error_log('XMRPay Watch could not persist a payment scan.');
                 }
             } catch (Throwable $error) {
                 error_log('XMRPay Watch failed: ' . get_class($error));

@@ -240,8 +240,10 @@ minute before retrying. SMTP calls can extend that budget.
 
 Completed scans resume after their verified checkpoint. The scanner checks that
 checkpoint before and after reading new blocks, avoiding repeated work while
-still detecting a changed chain. Each request processes new transactions
-separately, including expired requests whose monitoring remains active.
+still detecting a changed chain. Requests from the same wallet with compatible
+checkpoints and partial progress share block reads and output detection. Each
+request retains its own scan state, expiry and payment accounting. New or resumed
+requests with different progress use a separate scan group.
 
 Monitor the pending queue, last-scan times and cron logs. Keep scan delays below
 quote validity. The limit of 25 requests is not a throughput guarantee: measure
@@ -280,7 +282,7 @@ reopening them preserved their quotes. Another 2,000 status reads at concurrency
 100 passed without database writes or node calls. Sampled Apache/MariaDB memory
 peaked at 911 MiB. No request errors, timeouts or duplicate quotes occurred.
 
-The final runtime was compared with the earlier candidate on identical copies
+The 1.1.6 runtime was compared with the earlier candidate on identical copies
 of that 1,000-order history, with the same warmup:
 
 | HTTPS workload | Concurrency | Earlier p95 | Final p95 |
@@ -298,18 +300,35 @@ cohorts through 50 clients also passed. Eight sessions using equivalent invoice
 IDs and decimal amounts produced one quote, including across native payment and
 order-checkout routes.
 
-A separate offline-chain test delivered three blocks of 128 real transactions
-at two-minute intervals, with Watch running once per minute. Five active requests
-caught up and the funded control settled within the seven scheduled runs. This
-used the final bundled runtime and required no extra recovery runs; the earlier
-scanner needed two. Active scanning time fell from 151.03 to 115.45 seconds for
-that workload. Ten active requests exceeded the same schedule: seven remained
-behind after the final turn, although the control payment had settled. Escalation
-stopped at that measured limit. Five extra back-to-back turns recovered the queue
-in 101.77 seconds; that is not normal one-minute cron latency. During recovery,
-210 HTTP operations passed, and accounting and receipt replay remained unique.
-This test does not establish capacity for hundreds of active payments,
-public-node latency or continuous traffic beyond the measured window.
+A separate 1.1.7 offline-chain campaign delivered three blocks of 128 real
+transactions at two-minute intervals, with seven Watch runs at one-minute
+intervals. Each cohort started at the same verified height; the funded control
+was last in the queue and required three confirmations. The shared wallet
+scanner produced these results:
+
+| Active requests | Current after seven runs | Extra recovery runs |
+|---:|---|---:|
+| 10 | Yes; control paid | 0 |
+| 25 | Yes; control paid | 0 |
+| 50 | Yes; control paid | 0 |
+| 100 | No; all requests behind by up to two blocks | 5 |
+
+At 10 requests, active Watch time fell from 233.12 seconds in 1.1.6, including
+five recovery runs, to 28.34 seconds with no recovery. At 50, it used 66.54 seconds
+across the seven scheduled runs. The 100-request queue recovered in 96.50 seconds
+using back-to-back extra turns; that is not normal one-minute cron latency.
+During that recovery, 99 checkout reopenings and 101 status reads overlapped
+Watch with no errors. Their combined p95 was 19.05 seconds at concurrency 100.
+The payment, output claim and captured receipt remained unique after replay.
+
+A separate native payment test sent two invoice payments in one transaction and
+interrupted Watch between their accounting commits. Retrying closed both invoices,
+activated both None services and delivered one receipt each, without duplicate
+credits or output claims.
+
+These finite tests establish neither sustained capacity for 100 active requests
+under that block load nor capacity with public-node latency. Measure the active
+queue and expected block load on the intended host.
 
 External provisioning modules, external mail delivery, multiple companies, a
 separate MySQL server, other browsers and physical wallet-app handoff remain
@@ -333,8 +352,8 @@ manifest. No Composer install or package download is needed at runtime.
 
 Use Bash, Git, GNU coreutils, tar and zip, with clean local checkouts at:
 
-- [xmr-pay-php](https://github.com/SlowBearDigger/xmr-pay-php): `b7b3debfc791620c7b28b860c6fcdbade1cdf5fe`.
-- [xmr-pay-adapter-core](https://github.com/SlowBearDigger/xmr-pay-adapter-core): `4bc2351c876fbd3a8fe43289a81ba5d865b65922`.
+- [xmr-pay-php](https://github.com/SlowBearDigger/xmr-pay-php): `20e330319a25cd0396a3e9b6888ded66b1ed17c5`.
+- [xmr-pay-adapter-core](https://github.com/SlowBearDigger/xmr-pay-adapter-core): `c7a13fda5d35780f319b524d4d919a74124ccd2e`.
 
 ```bash
 bash tools/bundle-engine.sh /path/to/xmr-pay-php /path/to/xmr-pay-adapter-core
