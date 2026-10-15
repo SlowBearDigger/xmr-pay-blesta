@@ -47,7 +47,8 @@
 $paymentSettings = [
     'min_confirmations' => ['Confirmations required', 10],
     'index_offset' => ['Subaddress index offset', 1000000],
-    'invoice_minutes' => ['Quote validity in minutes', 60]
+    'invoice_minutes' => ['Quote validity in minutes', 60],
+    'abandoned_hours' => ['Watch unpaid quotes after expiry (hours)', 24]
 ];
 foreach ($paymentSettings as $field => [$label, $default]) { ?>
 <div class="col-md-6 mb-3">
@@ -57,6 +58,7 @@ foreach ($paymentSettings as $field => [$label, $default]) { ?>
 <?php } ?>
 </div>
 <p class="form-text">Use a dedicated wallet or a subaddress index range reserved for this installation. Full payment must be detected before the quote expires; confirmations may arrive later. Late payments require staff review under Tools &gt; Monero Payments.</p>
+<p class="form-text">Watch unpaid quotes for 1–8760 hours after expiry (default 24). Watching pauses only after a complete current scan finds no funds. Increasing the window also resumes quotes paused under a shorter window. Staff can resume a paused quote under Monero Payments; detected funds remain watched.</p>
 </fieldset>
 <div class="form-check mb-3">
     <?php $this->Form->fieldHidden('show_credit', '0'); ?>

@@ -56,8 +56,8 @@ configuration in gateway metadata; protect its encryption key and backups.
    Automation**. Confirm that **XMRPay Watch** is enabled with a one-minute
    interval. The task's enabled setting does not install the system cron for you.
 5. Under **Settings > System > Staff > Staff Groups**, grant the appropriate
-   Monero payment permissions. Viewing requests and accepting late payments
-   have separate permissions.
+   Monero payment permissions. Viewing requests is separate from accepting
+   late payments and resuming paused requests.
 6. Complete a test invoice, then check its payment transaction, remaining balance
    and service status. Configure Blesta's mail delivery and check the payment
    receipt too. Service activation follows Blesta's automation and the selected
@@ -81,6 +81,7 @@ Blesta or using other gateways alongside it.
 | Confirmations required | Confirmations required before recording payment. | 10 |
 | Subaddress index offset | Start of an index range reserved for this installation. | 1,000,000 |
 | Quote validity in minutes | Deadline for detecting the full payment. | 60 |
+| Watch unpaid quotes after expiry (hours) | Monitor empty expired requests for 1–8760 hours before pausing them. | 24 |
 | Show author credit | Display the optional author link below the checkout. | Enabled |
 
 Use a dedicated wallet or an index range reserved for this installation. Do not
@@ -88,6 +89,7 @@ reuse that range in another payment integration. Preserve payment tables and
 identifiers during migrations. Wallet, network and index changes are blocked
 while native requests remain pending, including expired requests that might
 still receive funds. This version has no automatic wallet-retirement operation.
+Pausing a request preserves its address, history and wallet reservation.
 
 ![Gateway configuration](docs/screenshots/configuration.png)
 
@@ -181,6 +183,22 @@ blocked. The request retains the accepting staff member, UTC time and reason.
 Use that action to reconcile late XMRPay payments. Blesta's separate **Record
 Payment** form does not reserve Monero outputs or close the XMRPay request.
 
+Empty expired requests remain watched for the configured period after expiry.
+The default is 24 hours, including after an upgrade without a saved setting.
+Pausing requires a complete current scan started after that period has elapsed;
+an incomplete scan or unavailable node cannot retire a request. Requests with
+detected funds remain watched. Empty requests for voided invoices follow the
+same expiry-based period; pausing or resuming them does not make those invoices
+eligible for payment.
+
+Use the **Watching paused** filter under **Tools > Monero Payments** to find
+paused requests. **Resume watching** requires the late-payment permission and
+a reason, records the staff member and time, and starts another monitoring
+period from resumption. It preserves the original quote and expiry, so a late
+payment still needs acceptance. Increasing the configured period also resumes
+requests paused under a shorter period. Reducing it applies at the next complete
+scan of an active request.
+
 Blesta stores currency amounts to four decimal places; Monero detection uses exact
 atomic amounts. Confirmed excess becomes proportional account credit, rounded
 down to Blesta's precision. Payment state, output reservations, transaction
@@ -213,7 +231,8 @@ saved can repeat that email. It does not repeat the payment or invoice credit.
 Watch scans up to 25 requests per scheduled run, sharing a 20-second scan budget.
 Database waits and accounting can extend total runtime. Progress is persisted
 between runs, and requests rotate so later entries receive scan time. Expired
-requests remain watched because they may still receive funds.
+requests remain watched until the configured period ends and a complete scan
+confirms that no funds were received. Funded requests remain in the scan queue.
 
 Receipt delivery follows scanning, with a separate five-second budget and up to
 ten due receipts per gateway. Failed or incomplete attempts wait at least one
@@ -222,12 +241,13 @@ minute before retrying. SMTP calls can extend that budget.
 Completed scans resume after their verified checkpoint. The scanner checks that
 checkpoint before and after reading new blocks, avoiding repeated work while
 still detecting a changed chain. Each request processes new transactions
-separately, including expired requests kept for late-payment review.
+separately, including expired requests whose monitoring remains active.
 
 Monitor the pending queue, last-scan times and cron logs. Keep scan delays below
 quote validity. The limit of 25 requests is not a throughput guarantee: measure
-the expected unpaid queue and block load on the intended deployment. This
-version has no automatic retirement of abandoned requests.
+the expected active queue and block load on the intended deployment. Choose a
+monitoring period that covers the expected support window without accumulating
+unnecessary empty requests.
 
 The tested flows include stock HTTPS checkout, interactive USD/EUR orders with
 live CoinGecko quotes, signed guest payment links, malformed-input rejection,
@@ -245,6 +265,51 @@ Stock database tests interrupted payment accounting before and after commit,
 then restored a backup and retried. Payment, output claims and receipt intent
 remained atomic, and recovery preserved one credit per payment. Authorized late
 acceptance, underpayment rejection and native staff permissions were also tested.
+
+Monitoring tests covered configuration changes, incomplete scans, detected funds,
+voided invoices and staff resumption. A real late payment after resumption closed
+the invoice, activated its None service and sent one receipt. Concurrent checkout
+and settlement preserved one request and payment, including when checkout waited
+for the payment transaction to commit.
+
+Finite HTTPS tests used stock Blesta 6.0.3, PHP 8.3.35, Apache prefork and MariaDB
+11.4 on a shared Ryzen 5 5500U host. One campaign created 1,000 requests for 100
+distinct clients at concurrency 25, with p95 4.66 seconds. The last 100 remained
+close to the middle 800. All requests had unique addresses and correct owners;
+reopening them preserved their quotes. Another 2,000 status reads at concurrency
+100 passed without database writes or node calls. Sampled Apache/MariaDB memory
+peaked at 911 MiB. No request errors, timeouts or duplicate quotes occurred.
+
+The final runtime was compared with the earlier candidate on identical copies
+of that 1,000-order history, with the same warmup:
+
+| HTTPS workload | Concurrency | Earlier p95 | Final p95 |
+|---|---:|---:|---:|
+| Create 100 additional requests | 25 | 4.83 s | 4.53 s |
+| Reopen 100 requests | 100 | 17.52 s | 16.07 s |
+
+These timings cover the native payment-page GET, form POST and confirmation GET.
+They exclude login, static assets and browser rendering. Watch was idle and nodes
+were local. Capacity tests used XMR invoices; new USD/EUR quotes call CoinGecko
+and were not load-tested in bursts. One hundred simultaneous checkouts still
+caused considerable waiting; the results are finite measurements, not a hosting
+capacity guarantee. Earlier
+cohorts through 50 clients also passed. Eight sessions using equivalent invoice
+IDs and decimal amounts produced one quote, including across native payment and
+order-checkout routes.
+
+A separate offline-chain test delivered three blocks of 128 real transactions
+at two-minute intervals, with Watch running once per minute. Five active requests
+caught up and the funded control settled within the seven scheduled runs. This
+used the final bundled runtime and required no extra recovery runs; the earlier
+scanner needed two. Active scanning time fell from 151.03 to 115.45 seconds for
+that workload. Ten active requests exceeded the same schedule: seven remained
+behind after the final turn, although the control payment had settled. Escalation
+stopped at that measured limit. Five extra back-to-back turns recovered the queue
+in 101.77 seconds; that is not normal one-minute cron latency. During recovery,
+210 HTTP operations passed, and accounting and receipt replay remained unique.
+This test does not establish capacity for hundreds of active payments,
+public-node latency or continuous traffic beyond the measured window.
 
 External provisioning modules, external mail delivery, multiple companies, a
 separate MySQL server, other browsers and physical wallet-app handoff remain
@@ -268,7 +333,7 @@ manifest. No Composer install or package download is needed at runtime.
 
 Use Bash, Git, GNU coreutils, tar and zip, with clean local checkouts at:
 
-- [xmr-pay-php](https://github.com/SlowBearDigger/xmr-pay-php): `d62364c34ffef5e3318304eb726262f4f9be11de`.
+- [xmr-pay-php](https://github.com/SlowBearDigger/xmr-pay-php): `b7b3debfc791620c7b28b860c6fcdbade1cdf5fe`.
 - [xmr-pay-adapter-core](https://github.com/SlowBearDigger/xmr-pay-adapter-core): `4bc2351c876fbd3a8fe43289a81ba5d865b65922`.
 
 ```bash

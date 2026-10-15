@@ -73,9 +73,10 @@ class XmrpayOrderStore implements OutputOrderStore
             created_at BIGINT UNSIGNED NOT NULL,
             last_scanned_at BIGINT UNSIGNED NOT NULL DEFAULT 0,
             scan_priority BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            watch_paused_hours SMALLINT UNSIGNED NOT NULL DEFAULT 0,
             PRIMARY KEY (id),
             UNIQUE KEY active_quote (active_key),
-            KEY pending_scan (gateway_id, status, scan_priority, last_scanned_at, id),
+            KEY pending_scan (gateway_id, status, watch_paused_hours, scan_priority, last_scanned_at, id),
             KEY receipt_delivery (gateway_id, receipt_due_at, id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
         if (!$record->query("SHOW COLUMNS FROM gateway_xmrpay_orders LIKE 'scan_priority'")->fetch()) {
@@ -86,6 +87,12 @@ class XmrpayOrderStore implements OutputOrderStore
         }
         if (!$record->query("SHOW COLUMNS FROM gateway_xmrpay_orders LIKE 'receipt_due_at'")->fetch()) {
             $record->query('ALTER TABLE gateway_xmrpay_orders ADD COLUMN receipt_due_at BIGINT UNSIGNED DEFAULT NULL');
+        }
+        if (!$record->query("SHOW COLUMNS FROM gateway_xmrpay_orders LIKE 'watch_paused_hours'")->fetch()) {
+            $record->query('ALTER TABLE gateway_xmrpay_orders
+                ADD COLUMN watch_paused_hours SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+                DROP INDEX pending_scan,
+                ADD INDEX pending_scan (gateway_id, status, watch_paused_hours, scan_priority, last_scanned_at, id)');
         }
         if (!$record->query("SHOW INDEX FROM gateway_xmrpay_orders WHERE Key_name = 'receipt_delivery'")->fetch()) {
             $record->query('ALTER TABLE gateway_xmrpay_orders ADD INDEX receipt_delivery (gateway_id, receipt_due_at, id)');
@@ -110,6 +117,12 @@ class XmrpayOrderStore implements OutputOrderStore
             throw new InvalidArgumentException('Invalid payment request.');
         }
         $this->validateInvoices($clientId, $currency, $allocations, $amount);
+        foreach ($allocations as $index => $allocation) {
+            $allocations[$index] = [
+                'id' => (int)$allocation['id'],
+                'amount' => bcadd((string)$allocation['amount'], '0', 4)
+            ];
+        }
         usort($allocations, static fn(array $left, array $right): int => (int)$left['id'] <=> (int)$right['id']);
         $activeKey = hash('sha256', json_encode([
             $this->gatewayId, $this->walletId, $clientId, bcadd($amount, '0', 4), $currency, $allocations
@@ -119,8 +132,16 @@ class XmrpayOrderStore implements OutputOrderStore
             throw new RuntimeException('Payment checkout is already being created.');
         }
         try {
+            // Look up the key before the transaction to avoid locking a missing index range.
+            $existingId = $this->Record->query('SELECT id FROM gateway_xmrpay_orders WHERE active_key = ?', [$activeKey])->fetchColumn();
             $this->begin();
-            $row = $this->Record->query('SELECT * FROM gateway_xmrpay_orders WHERE active_key = ? FOR UPDATE', [$activeKey])->fetch(PDO::FETCH_ASSOC);
+            $row = false;
+            if ($existingId !== false) {
+                $row = $this->Record->query('SELECT * FROM gateway_xmrpay_orders WHERE id = ? FOR UPDATE', [$existingId])->fetch(PDO::FETCH_ASSOC);
+                if ($row && $row['active_key'] !== $activeKey) {
+                    $row = false;
+                }
+            }
             $this->validateInvoices($clientId, $currency, $allocations, $amount, lock: true, requireBalance: true);
             if ($row) {
                 $order = $this->decodeOrder($row);
@@ -186,7 +207,10 @@ class XmrpayOrderStore implements OutputOrderStore
     {
         $rows = $this->Record->query("SELECT * FROM gateway_xmrpay_orders
             WHERE gateway_id = ? AND company_id = ? AND wallet_id = ? AND status = 'pending'
-            ORDER BY scan_priority, last_scanned_at, id LIMIT 25", [$this->gatewayId, $this->companyId, $this->walletId])->fetchAll(PDO::FETCH_ASSOC);
+                AND watch_paused_hours < ?
+            ORDER BY scan_priority, last_scanned_at, id LIMIT 25", [
+            $this->gatewayId, $this->companyId, $this->walletId, (int)($this->config['abandoned_hours'] ?? 24)
+        ])->fetchAll(PDO::FETCH_ASSOC);
         foreach ($rows as $row) {
             try {
                 $order = $this->decodeOrder($row);
@@ -227,10 +251,61 @@ class XmrpayOrderStore implements OutputOrderStore
                     }
                 }
                 $state = InvoicePolicy::mergeProgress($order['scan_state'], $patch);
-                $this->Record->query('UPDATE gateway_xmrpay_orders SET state = ?, last_scanned_at = ? WHERE id = ?', [
-                    json_encode($state, JSON_THROW_ON_ERROR), time(), $orderId
+                $pausedHours = $this->canPauseWatching($order, $state, $patch)
+                    ? (int)($this->config['abandoned_hours'] ?? 24) : 0;
+                $this->Record->query('UPDATE gateway_xmrpay_orders SET state = ?, last_scanned_at = ?, watch_paused_hours = ? WHERE id = ?', [
+                    json_encode($state, JSON_THROW_ON_ERROR), time(), $pausedHours, $orderId
                 ]);
             }
+            $this->connection->commit();
+        } catch (Throwable $error) {
+            $this->rollback();
+            throw $error;
+        }
+    }
+
+    private function canPauseWatching(array $order, array $state, array $patch): bool
+    {
+        $now = time();
+        $expiresAt = $state['expires_at'] ?? null;
+        $resumedAt = $state['watch_resume']['resumed_at'] ?? 0;
+        $expired = ($state['invoice_status'] ?? '') === 'expired' && ($state['closed_reason'] ?? '') === 'expired';
+        $cancelled = ($state['invoice_status'] ?? '') === 'cancelled' && ($state['closed_reason'] ?? '') === 'invoice-closed';
+        if (($patch['scan_complete'] ?? false) !== true || ($state['partial_block'] ?? null) !== null
+            || !is_int($patch['scanned_to'] ?? null)
+            || $patch['scanned_to'] < (int)($state['birthday_height'] ?? 1) - 1
+            || ($patch['scan_checkpoint']['height'] ?? null) !== $patch['scanned_to']
+            || !is_string($patch['scan_checkpoint']['hash'] ?? null)
+            || !preg_match('/^[a-f0-9]{64}$/D', $patch['scan_checkpoint']['hash'])
+            || !is_int($expiresAt) || $expiresAt < 1 || $expiresAt > $now
+            || !is_int($resumedAt) || $resumedAt < 0 || $resumedAt > $now
+            || (!$expired && !$cancelled)
+            || ($state['matches'] ?? null) !== [] || ($state['received_pico'] ?? null) !== '0'
+            || ($state['funded_at'] ?? null) !== null || ($state['funded_amount_atomic'] ?? null) !== null) {
+            return false;
+        }
+        $cutoff = max($expiresAt, $resumedAt) + (int)($this->config['abandoned_hours'] ?? 24) * 3600;
+        return $now >= $cutoff && (int)$order['last_scanned_at'] >= $cutoff;
+    }
+
+    public function resumeWatching(int $orderId, int $staffId, string $reason): void
+    {
+        $reason = trim($reason);
+        if ($staffId < 1 || $reason === '' || strlen($reason) > 500) {
+            throw new InvalidArgumentException('A staff member and review reason are required.');
+        }
+        $this->begin();
+        try {
+            $order = $this->lockOrder($orderId);
+            if ($order['status'] !== 'pending' || $order['wallet_id'] !== $this->walletId
+                || (int)$order['watch_paused_hours'] < (int)($this->config['abandoned_hours'] ?? 24)) {
+                throw new RuntimeException('Payment watching is not paused.');
+            }
+            $state = $order['scan_state'];
+            $state['watch_resume'] = ['staff_id' => $staffId, 'resumed_at' => time(), 'reason' => $reason];
+            $this->Record->query('UPDATE gateway_xmrpay_orders SET state = ?, watch_paused_hours = 0, scan_priority = 0 WHERE id = ?', [
+                json_encode($state, JSON_THROW_ON_ERROR), $orderId
+            ]);
             $this->connection->commit();
         } catch (Throwable $error) {
             $this->rollback();

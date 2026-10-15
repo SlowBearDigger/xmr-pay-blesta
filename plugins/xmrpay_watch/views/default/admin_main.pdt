@@ -2,7 +2,7 @@
 echo $message ?? null;
 $this->Widget->clear();
 $links = [];
-foreach (['all', 'pending', 'review'] as $category) {
+foreach (['all', 'pending', 'review', 'paused'] as $category) {
     $links[] = [
         'name' => $this->_('AdminMain.index.' . $category, true),
         'current' => $filter === $category,
@@ -44,7 +44,10 @@ $this->Widget->create($this->_('AdminMain.index.page_title', true), ['id' => 'xm
                     <?php echo $this->Html->safe($order['xmr_amount']); ?> XMR
                 </td>
                 <td><?php echo $this->Html->safe($order['received_xmr'] ?? $this->_('AdminMain.index.unknown', true)); ?></td>
-                <td><?php echo $this->Html->safe($order['status'] . ' / ' . $invoiceStatus); ?></td>
+                <td>
+                    <?php echo $this->Html->safe($order['status'] . ' / ' . $invoiceStatus); ?>
+                    <?php if ($order['watch_paused']) { ?><br><?php $this->_('AdminMain.index.paused'); ?><?php } ?>
+                </td>
                 <td>
                     <?php
                     if (is_int($expiresAt) && $expiresAt > 0) {
@@ -67,14 +70,26 @@ $this->Widget->create($this->_('AdminMain.index.page_title', true), ['id' => 'xm
                         <?php } ?>
                         <p class="mb-0"><?php echo $this->Html->safe(is_string($acceptance['reason'] ?? null) ? $acceptance['reason'] : ''); ?></p>
                     <?php } ?>
-                    <?php if ($can_accept && $late) {
+                    <?php if (is_array($state['watch_resume'] ?? null)) {
+                        $resume = $state['watch_resume'];
+                    ?>
+                        <p class="mb-1"><?php $this->_('AdminMain.index.resumed_by'); ?> #<?php echo $this->Html->safe((int)($resume['staff_id'] ?? 0)); ?></p>
+                        <?php if (is_int($resume['resumed_at'] ?? null)) { ?>
+                            <p class="mb-1"><?php echo $this->Html->safe(gmdate('Y-m-d H:i:s', $resume['resumed_at'])); ?> UTC</p>
+                        <?php } ?>
+                        <p class="mb-1"><?php echo $this->Html->safe(is_string($resume['reason'] ?? null) ? $resume['reason'] : ''); ?></p>
+                    <?php } ?>
+                    <?php if ($can_accept && ($late || $order['watch_paused'])) {
                         $this->Form->create($this->base_uri . 'plugin/xmrpay_watch/admin_main/accept/');
                         $this->Form->fieldHidden('order_id', $order['id']);
                         $this->Form->fieldHidden('gateway_id', $order['gateway_id']);
+                        $this->Form->fieldHidden('operation', $order['watch_paused'] ? 'resume' : 'accept');
                         $reasonId = 'reason_' . $order['id'];
-                        $this->Form->label($this->_('AdminMain.index.reason', true), $reasonId, ['class' => 'form-label']);
+                        $reasonLabel = $order['watch_paused'] ? 'AdminMain.index.resume_reason' : 'AdminMain.index.reason';
+                        $this->Form->label($this->_($reasonLabel, true), $reasonId, ['class' => 'form-label']);
                         $this->Form->fieldText('reason', '', ['id' => $reasonId, 'class' => 'form-control mb-2', 'required' => true, 'maxlength' => 500]);
-                        $this->Form->fieldSubmit('accept', $this->_('AdminMain.index.accept', true), ['class' => 'btn btn-sm btn-primary']);
+                        $actionLabel = $order['watch_paused'] ? 'AdminMain.index.resume' : 'AdminMain.index.accept';
+                        $this->Form->fieldSubmit('accept', $this->_($actionLabel, true), ['class' => 'btn btn-sm btn-primary']);
                         $this->Form->end();
                     } ?>
                 </td>

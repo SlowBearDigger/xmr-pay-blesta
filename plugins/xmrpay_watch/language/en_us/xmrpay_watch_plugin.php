@@ -5,4 +5,4 @@ $lang['XmrpayWatchPlugin.scan_payments'] = 'Scan Monero payments';
 $lang['XmrpayWatchPlugin.scan_description'] = 'Check pending Monero quotes and apply verified payments to invoices.';
 $lang['XmrpayWatchPlugin.payments'] = 'Monero Payments';
 $lang['XmrpayWatchPlugin.permission.view'] = 'View Monero payments';
-$lang['XmrpayWatchPlugin.permission.accept'] = 'Accept late Monero payments';
+$lang['XmrpayWatchPlugin.permission.accept'] = 'Accept late Monero payments and resume watching';

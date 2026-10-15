@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.1.6] - Unreleased
+
+- Let administrators configure how long empty requests remain watched after expiry, from 1 to 8760 hours with a 24-hour default.
+- Pause requests only after a complete current scan confirms no funds; keep detected payments watched.
+- Resume requests when the monitoring period is extended, or through the native staff action with a recorded reason.
+- Preserve quotes, expiry, wallet reservations and late-payment accounting when monitoring pauses or resumes.
+- Avoid conflicting index-range locks when different clients create their first payment requests concurrently.
+- Reuse payment requests across equivalent invoice identifiers and decimal amounts.
+- Reuse the invoice ownership check when checkout's route and session select the same invoice.
+- Reuse transaction key derivations across outputs while preserving payment and chain validation.
+
 ## [1.1.5] - Unreleased
 
 - Send native Blesta payment receipts after accounting commits, using its template, billing contacts and mail settings.

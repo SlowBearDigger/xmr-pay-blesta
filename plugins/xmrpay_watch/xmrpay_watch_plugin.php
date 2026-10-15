@@ -125,6 +125,7 @@ class XmrpayWatchPlugin extends Plugin
             $this->Session->clear('payment');
             $payment = [];
         }
+        $validatedInvoiceIds = [];
         if (isset($payment['amounts'])) {
             if (!is_array($payment['amounts'])) {
                 throw new InvalidArgumentException('Invalid payment allocations.');
@@ -136,10 +137,13 @@ class XmrpayWatchPlugin extends Plugin
                 }
                 $ids[] = $allocation['invoice_id'];
             }
-            $this->validatePaymentInvoices($ids, $clientId);
+            $validatedInvoiceIds = $this->validatePaymentInvoices($ids, $clientId);
         }
         if ($action === 'method' && isset($get[0])) {
-            $this->validatePaymentInvoices([$get[0]], $clientId);
+            $invoiceId = $this->paymentId($get[0]);
+            if (!isset($validatedInvoiceIds[$invoiceId])) {
+                $this->validatePaymentInvoices([$invoiceId], $clientId);
+            }
         }
         if ($action === 'index' && $_POST) {
             $amounts = $_POST['applyamount'] ?? [];
@@ -162,7 +166,7 @@ class XmrpayWatchPlugin extends Plugin
         }
     }
 
-    private function validatePaymentInvoices(array $ids, string $clientId): void
+    private function validatePaymentInvoices(array $ids, string $clientId): array
     {
         $seen = [];
         foreach ($ids as $id) {
@@ -176,6 +180,7 @@ class XmrpayWatchPlugin extends Plugin
                 throw new InvalidArgumentException('Invalid invoice selection.');
             }
         }
+        return $seen;
     }
 
     private function paymentId($value): string

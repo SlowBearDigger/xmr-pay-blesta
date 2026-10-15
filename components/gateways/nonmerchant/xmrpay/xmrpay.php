@@ -110,7 +110,8 @@ class Xmrpay extends NonmerchantGateway
                 'min_confirmations' => [10, 1, 720],
                 'minimum_nodes' => [2, 1, 8],
                 'index_offset' => [1000000, 0, 2147483647],
-                'invoice_minutes' => [60, 1, 10080]
+                'invoice_minutes' => [60, 1, 10080],
+                'abandoned_hours' => [24, 1, 8760]
             ] as $name => [$default, $minimum, $maximum]) {
                 $value = (string)($meta[$name] ?? $default);
                 if (!preg_match('/^[0-9]+$/D', $value) || (int)$value < $minimum || (int)$value > $maximum) {
