@@ -1,12 +1,14 @@
 # Changelog
 
-## [1.1.7] - Unreleased
+## [1.1.7] - 2026-11-21
 
 - Share block reads and output detection across pending requests from the same wallet with compatible scan progress.
 - Preserve individual checkpoints, partial scans, late-payment policy and native accounting while rotating attempted batches fairly.
 - Keep existing single-request scans and persisted progress compatible, without a database migration or new dependency.
 
-## [1.1.6] - Unreleased
+Earlier development changes included in 1.1.7:
+
+### 1.1.6
 
 - Let administrators configure how long empty requests remain watched after expiry, from 1 to 8760 hours with a 24-hour default.
 - Pause requests only after a complete current scan confirms no funds; keep detected payments watched.
@@ -17,7 +19,7 @@
 - Reuse the invoice ownership check when checkout's route and session select the same invoice.
 - Reuse transaction key derivations across outputs while preserving payment and chain validation.
 
-## [1.1.5] - Unreleased
+### 1.1.5
 
 - Send native Blesta payment receipts after accounting commits, using its template, billing contacts and mail settings.
 - Persist receipt intent with payment accounting and retry failed delivery independently of node availability.
@@ -25,7 +27,7 @@
 - Show a usable checkout error and retry link when a new quote cannot be created; return clients to their invoices when the balance changes.
 - Resume completed scans after their verified checkpoint, preserving chain validation while avoiding repeated historical reads.
 
-## [1.1.4] - Unreleased
+### 1.1.4
 
 - Update checkout automatically from its saved payment state without triggering node scans from the browser.
 - Authorize status reads for the exact checkout session, including signed guest links and multiple tabs.
@@ -36,15 +38,15 @@
 - Keep the checkout width stable when payment instructions disappear, including inside Blesta's floated gateway container.
 - Replace the agent prototype instructions with native setup, operating limits and desktop payment screenshots.
 
-## [1.1.3] - Unreleased
+### 1.1.3
 
 - Reuse the XMRPay payment card with the exact amount, network, address and late-payment guidance.
 - Generate payment QR codes with Blesta's bundled library in SVG format, without requiring GD or an external service.
 - Add address copying with a selection fallback and an explicit failure message.
 - Group wallet, node and payment settings using Blesta's responsive form components.
-- Verify native and plugin-prefixed checkout routes and dense-block recovery, accounting and queue progress on stock Blesta.
+- Verify native and plugin-prefixed checkout routes and dense-block recovery, accounting and queue progress using native Blesta checkout and accounting.
 
-## [1.1.2] - Unreleased
+### 1.1.2
 
 - Validate invoice ownership and unique selections before native checkout renders or stores payment allocations.
 - Reject malformed invoice and amount inputs and clear invalid payment sessions.
@@ -53,7 +55,7 @@
 - Reuse each node's cURL connection while resetting request options between RPC calls.
 - Rotate the first scan turn independently from shorter attempts so pending requests receive the full available batch budget.
 
-## [1.1.1] - Unreleased
+### 1.1.1
 
 - Add a native Monero Payments page with separate viewing and late-acceptance permissions.
 - Verify late payments again before accepting the original quote, preserving atomic output claims and accounting.
@@ -62,7 +64,7 @@
 - Decode legacy RingCT amounts and masks using Monero's scalar encoding while retaining compact RingCT support.
 - Let slow-node scans use the remaining cron budget so canonical rechecks can complete.
 
-## [1.1.0] - Unreleased
+### 1.1.0
 
 - Default new installations to Mainnet and bundle the classic RingCT runtime.
 - Add PHP-native checkout and a Blesta cron plugin using the existing view-key engine.
@@ -74,11 +76,11 @@
 - Document local nodes, container networking and Basic/Digest authentication.
 - Reject stale invoice checkouts after the balance changes while preserving settlement of already-sent funds.
 - Preserve saved secrets in Blesta's settings form and keep mobile payment addresses within the viewport.
-- Verify licensed HTTP checkout, chain detection, invoice closure and service activation with test funds.
+- Verify native HTTP checkout, chain detection, invoice closure and service activation with test funds.
 - Bundle only required runtime files and retain complete upstream license notices.
 - Keep generated dependencies outside Git and exclude untracked files from installation packages.
 
-## [1.0.0] - Unreleased
+### 1.0.0
 
 - Create a view-only agent payment quote for each checkout, targeting XMRPay 2.0.0.
 - Validate signed metadata and confirmed agent state before recording payment.
